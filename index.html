@@ -1,0 +1,2304 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wise Buchhaltungstool (USt & SKR03 - EUR)</title>
+    <!-- Lade Tailwind CSS für responsives Styling -->
+    <script src="https://cdn.tailwindcss.com/"></script>
+    <style>
+        /* Spezifische Schriftart und Hintergrund */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        /* Farben passend zu einem Finance-Tool */
+        .card {
+            background-color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+        }
+        .income { color: #10b981; } /* Emerald-Grün für Einnahmen */
+        .expense { color: #ef4444; } /* Rot für Ausgaben */
+        .auto-booked { background-color: #f0fdf4; border-color: #dcfce7; } /* Grünlicher Hintergrund für automatisch gebuchte Zeilen */
+
+        /* Spezielle Spaltenbreiten für bessere Lesbarkeit auf dem Desktop */
+        @media (min-width: 768px) {
+            .table-cell-date { width: 8%; }
+            .table-cell-amount { width: 9%; }
+            .table-cell-vat { width: 8%; }
+            .table-cell-account { width: 15%; } /* Etwas breiter für Dropdown */
+            .table-cell-receipt { width: 14%; }
+            .table-cell-orig { width: 8%; } /* Neu */
+        }
+        .vat-rate, .account-select {
+            /* Styles für das Dropdown */
+            padding: 4px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            width: 100%;
+        }
+        .select-disabled {
+            background-color: #f3f4f6;
+            color: #6b7280;
+            cursor: not-allowed;
+        }
+        /* Styling für das Modal */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 24px;
+            border-radius: 12px;
+            max-width: 90%;
+            width: 800px;
+            max-height: 90%;
+            overflow-y: auto;
+        }
+        /* Link, der zur Zeile springt */
+        .jump-link {
+            text-decoration: underline;
+            color: #2563eb;
+            cursor: pointer;
+        }
+
+        /* NEU: Chat-Panel Styling */
+        #chatModal {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 90%;
+            max-width: 400px;
+            height: 80%;
+            max-height: 550px;
+            display: none;
+            z-index: 1010;
+        }
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+            border: 1px solid #e2e8f0;
+        }
+        #chatMessages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 15px;
+            background-color: #f7f9fb;
+        }
+        .user-message {
+            background-color: #3b82f6;
+            color: white;
+            border-radius: 15px 15px 0 15px;
+            max-width: 80%;
+            padding: 8px 12px;
+            margin-left: auto;
+            margin-bottom: 10px;
+        }
+        .ai-message {
+            background-color: #e5e7eb;
+            color: #1f2937;
+            border-radius: 15px 15px 15px 0;
+            max-width: 80%;
+            padding: 8px 12px;
+            margin-right: auto;
+            margin-bottom: 10px;
+            line-height: 1.4;
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto">
+
+        <!-- Kopfzeile -->
+        <header class="mb-8 flex justify-between items-start">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800 flex items-center">
+                    Wise Buchhaltungs-Assistent (USt & SKR03 - EUR)
+                    <span class="ml-3 text-sm font-medium bg-blue-100 text-blue-800 px-3 py-1 rounded-full">DB VERBUNDEN - EUR & USt</span>
+                </h1>
+                <p class="text-gray-600 mt-1">Das Tool bucht jetzt automatisch Umsatzsteuer-Satz und Konten-Code. Basiswährung: EUR. **Konten-Codes sind im Dropdown verfügbar.**</p>
+            </div>
+        </header>
+        
+        <!-- ANLEITUNG ACCORDION -->
+        <details class="card p-6 mb-8 bg-yellow-50 border-yellow-300">
+            <summary class="text-xl font-bold text-yellow-800 cursor-pointer">
+                Anleitung: So funktioniert die automatisierte Buchung (Klicken zum Öffnen)
+            </summary>
+            <div class="mt-4 text-gray-700 space-y-4">
+                <h3 class="text-lg font-semibold border-b pb-1">Phase 1: Regeln festlegen (Nur einmal nötig)</h3>
+                <ol class="list-decimal list-inside space-y-2 ml-4">
+                    <li>**Wise CSV hochladen:** Klicke auf **"1. Wise CSV-Datei auswählen"**. Die Tabelle füllt sich mit Transaktionen.</li>
+                    <li>**Manuelle Erstbuchung:** Wähle die **erste Transaktion** eines bestimmten Händlers, die **noch nicht grün** markiert ist.</li>
+                    <li>**Konten-Code zuweisen:** Wähle in der Spalte **"Konten-Code"** den passenden Code aus dem Dropdown-Menü (z.B. `6550: IT-Kosten`).</li>
+                    <li>**USt-Satz festlegen:** Wähle im Dropdown **"USt-Satz"** den korrekten Satz, der auf deinem Beleg steht (z.B. `19.0% (Standard)`).</li>
+                    <li>**Regel Speichern:** Sobald du die Felder verlässt (z.B. klickst oder tippst du in ein anderes Feld), speichert das Tool diese Zuordnung automatisch und dauerhaft in deiner Datenbank.</li>
+                    <li>**Beleg verknüpfen:** Nutze das **grüne Kamera-Icon** (Scanfunktion DEAKTIVIERT) oder trage den Link zu deinem Cloud-Speicher in die Spalte **"Beleg-Link"** ein.</li>
+                </ol>
+
+                <h3 class="text-lg font-semibold border-b pb-1 pt-3">Phase 2: Die Automatisierung (Dein Alltags-Workflow)</h3>
+                <ul class="list-disc list-inside space-y-2 ml-4">
+                    <li>**Neue CSV hochladen:** Lade deine nächste Wise CSV hoch.</li>
+                    <li>**Grüne Markierung:** Alle bekannten Transaktionen (die du in Phase 1 einmal gebucht hast) werden sofort **grün markiert** und automatisch mit Konten-Code und USt-Satz versehen. **WICHTIG:** Das Tool unterstützt jetzt **Wildcard-Regeln** (`*`), die du im Regel-Management festlegen kannst!</li>
+                    <li>**WICHTIG:** Grün markierte Zeilen sind **gesperrt** (Schloss-Symbol) und können nur durch Klicken auf das **Schloss** manuell korrigiert werden.</li>
+                    <li>**Vollständigkeits-Check:** Überprüfe im Kasten **"Offene Buchungen"** (rot markiert), welche Transaktionen noch Konten-Codes oder Beleg-Links benötigen, und springe per Klick direkt zur Zeile.</li>
+                </ul>
+                
+                <h3 class="text-lg font-semibold border-b pb-1 pt-3">Phase 3: USt-Report generieren</h3>
+                <ul class="list-disc list-inside space-y-2 ml-4">
+                    <li>**Datum filtern:** Gib im Abschnitt **"4. USt-Bericht und Filter"** das Start- und Enddatum für dein Quartal/Halbjahr ein.</li>
+                    <li>**Bericht erstellen:** Klicke auf **"USt-Bericht generieren"**. Bei **"Offene Buchungen"** (rot) zuerst die fehlenden Einträge prüfen!</li>
+                    <li>**Export:** Das Tool liefert dir eine Übersicht der **USt-Summen nach Konten-Code und Satz**, die du für deine USt-Voranmeldung verwenden kannst.</li>
+                </ul>
+            </div>
+        </details>
+
+        <!-- Upload- und Kontostand-Bereich (Top-Karten) -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+
+            <!-- 1. Upload- und Export-Steuerung -->
+            <div class="md:col-span-1 space-y-4">
+                <!-- Upload Card -->
+                <div class="card p-6">
+                    <label for="csvFile" class="block text-lg font-semibold text-gray-700 mb-3">1. Wise CSV-Datei auswählen</label>
+                    <input type="file" id="csvFile" accept=".csv" class="w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-blue-50 file:text-blue-700
+                        hover:file:bg-blue-100"
+                        onchange="handleFileUpload(event)">
+                    <p id="uploadMessage" class="text-sm mt-3 text-red-500 hidden">
+                        <!-- Hier werden Fehlermeldungen angezeigt -->
+                    </p>
+                </div>
+
+                <!-- Export Card -->
+                <div class="card p-6">
+                    <h2 class="text-lg font-semibold text-gray-700 mb-3">2. Export-Optionen</h2>
+                    <!-- NEU: Regelverwaltung -->
+                    <button id="manageRulesButton" onclick="openRulesModal()"
+                            class="w-full bg-yellow-600 text-white py-2 px-4 rounded-full font-semibold hover:bg-yellow-700 transition duration-150 mb-3"
+                            title="Regeln anzeigen, bearbeiten, Priorität festlegen und löschen (Wildcards bearbeiten).">
+                        Buchungsregeln verwalten
+                    </button>
+                    <!-- Export der Daten -->
+                    <button id="exportButton" onclick="exportToCSV()" 
+                            class="w-full bg-indigo-600 text-white py-2 px-4 rounded-full font-semibold hover:bg-indigo-700 transition duration-150 disabled:bg-indigo-300 mb-3"
+                            disabled
+                            title="Exportiert die komplette Transaktionstabelle inklusive Konten-Codes, USt und Beleg-Links als CSV-Datei.">
+                        Transaktionsdaten (CSV) exportieren
+                    </button>
+                    <!-- Export der Regeln -->
+                    <button id="exportRulesButton" onclick="exportMappingsToJSON()" 
+                            class="w-full bg-gray-500 text-white py-2 px-4 rounded-full font-semibold hover:bg-gray-600 transition duration-150"
+                            title="Exportiert alle Ihre gespeicherten Buchungsregeln (Referenz, Konten-Code, USt) als JSON-Datei zur Sicherung oder Übertragung.">
+                        Buchungsregeln (JSON) exportieren
+                    </button>
+
+                    <p id="exportMessage" class="text-xs text-gray-500 mt-2">Exportiert alle Transaktionen inkl. Konten-Code und USt.</p>
+                </div>
+                
+                <!-- Import Card -->
+                <div class="card p-6">
+                    <label for="jsonFile" class="block text-lg font-semibold text-gray-700 mb-3"
+                           title="Laden Sie eine JSON-Datei mit Buchungsregeln hoch, um diese in Ihre Datenbank zu importieren.">
+                        3. Regeln (JSON) importieren
+                    </label>
+                    <input type="file" id="jsonFile" accept=".json" class="w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-purple-50 file:text-purple-700
+                        hover:file:bg-purple-100"
+                        onchange="handleJSONImport(event)">
+                    <p id="importMessage" class="text-sm mt-3 text-red-500">
+                        <!-- Import Status -->
+                    </p>
+                </div>
+            </div>
+
+
+            <!-- 2. Kontostands-Karte -->
+            <div class="card p-6 md:col-span-3">
+                <h2 class="text-lg font-semibold text-gray-700 mb-4">Finanzübersicht (Basis EUR)</h2>
+                <p id="autoBookingStatus" class="text-sm text-blue-600 font-medium mb-3">Lade Buchungsregeln...</p>
+                <div class="grid grid-cols-1 sm:grid-cols-5 gap-4 text-center">
+                    <div>
+                        <p class="text-sm text-gray-500">Einnahmen gesamt</p>
+                        <p id="totalIncome" class="text-2xl font-bold income mt-1">0.00 EUR</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Ausgaben gesamt</p>
+                        <p id="totalExpense" class="text-2xl font-bold expense mt-1">0.00 EUR</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Umsatzsteuer (Geschätzt)</p>
+                        <p id="totalVAT" class="text-2xl font-bold text-yellow-600 mt-1">0.00 EUR</p>
+                    </div>
+                     <!-- NEU: Offene Buchungen -->
+                    <div class="cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition duration-150" onclick="openCompletenessModal()"
+                         title="Klicken, um alle Transaktionen zu sehen, denen noch der Konten-Code oder der Beleg-Link fehlt.">
+                        <p class="text-sm text-gray-500 font-semibold">Offene Buchungen</p>
+                        <p id="openBookingsCount" class="text-2xl font-bold text-red-600 mt-1">0</p>
+                        <p class="text-xs text-red-400 mt-1">(Klicken für Details)</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Netto-Saldo</p>
+                        <p id="netBalance" class="text-2xl font-bold text-gray-800 mt-1">0.00 EUR</p>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-4 italic">Umsatzsteuer- und Netto-Werte basieren auf der manuellen/automatischen Zuordnung und sind gerundet. Bitte vor der Steuererklärung prüfen.</p>
+            </div>
+
+        </div>
+        
+        <!-- MWST REPORTING SEKTION -->
+        <div class="card p-6 mb-10">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">4. USt-Bericht und Filter</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-6">
+                <!-- Startdatum -->
+                <div>
+                    <label for="startDate" class="block text-sm font-medium text-gray-700">Startdatum (z.B. 01.01.YYYY)</label>
+                    <input type="date" id="startDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 text-sm">
+                </div>
+                <!-- Enddatum -->
+                <div>
+                    <label for="endDate" class="block text-sm font-medium text-gray-700">Enddatum (z.B. 31.03.YYYY)</label>
+                    <input type="date" id="endDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 text-sm">
+                </div>
+                <!-- Button -->
+                <div class="md:col-span-2">
+                     <button onclick="generateMWSTReport()" 
+                            class="w-full bg-blue-600 text-white py-2 px-4 rounded-full font-semibold hover:bg-blue-700 transition duration-150 disabled:bg-blue-300"
+                            id="generateReportButton"
+                            title="Generiert eine USt-fertige Übersicht aller gebuchten Transaktionen im ausgewählten Zeitraum.">
+                        USt-Bericht generieren
+                    </button>
+                </div>
+            </div>
+
+            <!-- Bericht Ergebnisse -->
+            <div id="reportResults" class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <p class="text-gray-500">Wähle einen Zeitraum und klicke auf "USt-Bericht generieren", um die Ergebnisse anzuzeigen.</p>
+            </div>
+        </div>
+
+        <!-- Transaktionstabelle -->
+        <div class="card overflow-x-auto">
+            <div class="p-6">
+                <h2 class="text-lg font-semibold text-gray-700">Detailansicht & Buchung (USt)</h2>
+                <p class="text-xs text-gray-500 mt-1">Wähle den **Konten-Code** und den USt-Satz, um die Buchungsregel dauerhaft zu speichern.</p>
+                <!-- NEU: Suchleiste -->
+                <div class="mt-4 mb-4">
+                    <input type="text" id="searchInput" oninput="calculateAndRender(window.currentTransactions)"
+                           placeholder="Suche nach Referenz oder Konten-Code..."
+                           class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+            </div>
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-3 py-3 text-left table-cell-date text-xs font-medium text-gray-500 uppercase tracking-wider">Datum</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Beschreibung (Referenz)</th>
+                        <th class="px-6 py-3 text-right table-cell-orig text-xs font-medium text-gray-500 uppercase tracking-wider">Original Währung</th>
+                        <th class="px-6 py-3 text-right table-cell-amount text-xs font-medium text-gray-500 uppercase tracking-wider">Betrag (Brutto)</th>
+                        
+                        <th class="px-6 py-3 text-left table-cell-account text-xs font-medium text-gray-500 uppercase tracking-wider">Konten-Code</th>
+                        <th class="px-6 py-3 text-left table-cell-vat text-xs font-medium text-gray-500 uppercase tracking-wider">USt-Satz</th>
+                        <th class="px-6 py-3 text-right table-cell-amount text-xs font-medium text-gray-500 uppercase tracking-wider">Netto (EUR)</th>
+                        <th class="px-6 py-3 text-right table-cell-amount text-xs font-medium text-gray-500 uppercase tracking-wider">USt (EUR)</th>
+
+                        <th class="px-6 py-3 text-left table-cell-receipt text-xs font-medium text-gray-500 uppercase tracking-wider">Beleg-Link (Kamera)</th>
+                        <th class="px-3 py-3 text-right table-cell-amount text-xs font-medium text-gray-500 uppercase tracking-wider">Saldo</th>
+                    </tr>
+                </thead>
+                <tbody id="transactionTableBody" class="bg-white divide-y divide-gray-200">
+                    <!-- Transaktionen werden hier von JavaScript eingefügt -->
+                    <tr>
+                        <td colspan="10" class="px-6 py-4 text-center text-gray-500">Bitte lade eine Wise CSV-Datei hoch, um die Transaktionen anzuzeigen.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+    </div>
+
+    <!-- MODAL FÜR REGELVERWALTUNG -->
+    <div id="rulesModal" class="modal">
+        <div class="modal-content">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h2 class="text-xl font-bold text-gray-800">Buchungsregeln verwalten</h2>
+                <button onclick="closeRulesModal()" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            
+            <p id="ruleCountStatus" class="text-sm text-gray-600 mb-4"></p>
+
+            <div id="rulesListContainer" class="max-h-[50vh] overflow-y-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-2/5">Referenz (Schlüssel)</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/12">Priorität</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/4">Konten-Code</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/4">USt-Satz</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/12">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rulesTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Regeln werden hier geladen -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-4 flex justify-end">
+                 <button onclick="closeRulesModal()" class="bg-gray-200 text-gray-700 py-2 px-4 rounded-full font-semibold hover:bg-gray-300 transition duration-150">
+                    Schließen
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- NEU: MODAL FÜR OFFENE BUCHUNGEN (COMPLETENESS CHECK) -->
+    <div id="completenessModal" class="modal">
+        <div class="modal-content">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h2 class="text-xl font-bold text-gray-800">Offene Buchungen & Prüfungsliste</h2>
+                <button onclick="closeCompletenessModal()" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            
+            <p id="completenessStatus" class="text-sm text-gray-600 mb-4"></p>
+
+            <div id="completenessListContainer" class="max-h-[50vh] overflow-y-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/5">Datum</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-2/5">Beschreibung</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/5">Fehlende Info</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/5">Aktion</th>
+                        </tr>
+                    </thead>
+                    <tbody id="completenessTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Ergebnisse werden hier geladen -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-4 flex justify-end">
+                 <button onclick="closeCompletenessModal()" class="bg-gray-200 text-gray-700 py-2 px-4 rounded-full font-semibold hover:bg-gray-300 transition duration-150">
+                    Schließen
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- NEU: CHAT MODAL -->
+    <div id="chatModal" class="chat-container">
+        <div class="flex justify-between items-center p-3 border-b border-gray-200 bg-indigo-600 text-white rounded-t-lg">
+            <h3 class="text-lg font-semibold">KI-Buchhaltungs-Assistent</h3>
+            <button onclick="closeChatModal()" class="text-white hover:text-gray-200">&times;</button>
+        </div>
+        <div id="chatMessages" class="flex flex-col-reverse overflow-y-auto">
+             <!-- Nachrichten werden hier von JS eingefügt -->
+        </div>
+        <div class="p-3 border-t border-gray-200 flex space-x-2">
+            <input type="text" id="chatInput" placeholder="Frage oder Befehl eingeben..." class="flex-grow p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+            <button onclick="handleChatSubmit()" id="chatSendButton" class="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-150" title="Senden">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+            </button>
+        </div>
+    </div>
+    
+    <!-- NEU: FLOATING CHAT BUTTON -->
+    <button onclick="openChatModal()" class="fixed bottom-6 right-6 bg-indigo-600 text-white p-4 rounded-full shadow-lg hover:bg-indigo-700 transition duration-150 z-50" title="KI-Buchhaltungs-Assistent öffnen">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.649A9.954 9.954 0 0112 2c4.97 0 9 3.582 9 8z" />
+        </svg>
+    </button>
+
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Firebase Variables
+        window.db = null;
+        window.auth = null;
+        window.userId = null;
+        window.isAuthReady = false;
+        // Die Mappings speichern nun ein Objekt { accountCode: string, vatRate: number, priority: number }
+        window.categoryMappings = {}; 
+        window.openBookings = []; // NEU: Liste der unvollständigen Transaktionen
+
+        // Mandatory Firebase Initialization
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        const app = initializeApp(firebaseConfig);
+        window.db = getFirestore(app);
+        window.auth = getAuth(app);
+        
+        // 1. Authentication Setup
+        onAuthStateChanged(window.auth, async (user) => {
+            if (user) {
+                window.userId = user.uid;
+                window.isAuthReady = true;
+                console.log("Firebase Auth bereit. User ID:", window.userId);
+                // Call needs to be available globally, so loadCategoryMappings is now defined globally below
+                window.loadCategoryMappings();
+            } else {
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(window.auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(window.auth);
+                    }
+                } catch (error) {
+                    console.error("Firebase Anmeldefehler:", error);
+                    window.isAuthReady = true; // Trotz Fehler den Status setzen
+                }
+            }
+        });
+
+        // 2. Data Persistence (Category Mappings)
+        function getMappingsDocRef() {
+            if (!window.userId || !window.db) return null;
+            // Pfad: /artifacts/{appId}/users/{userId}/wise_category_mappings/rules
+            return doc(window.db, `artifacts/${appId}/users/${window.userId}/wise_category_mappings/rules`);
+        }
+
+        // DIESE FUNKTION WURDE GLOBAL GEMACHT, UM VOM switchLanguage() (ausserhalb des Moduls) AUFGERUFEN WERDEN ZU KÖNNEN.
+        window.loadCategoryMappings = function() {
+            const docRef = getMappingsDocRef();
+            if (!docRef) return;
+
+            const statusElement = document.getElementById('autoBookingStatus');
+            statusElement.textContent = window.DE_TEXTS.status_loading;
+            
+            // Verwende onSnapshot, um Änderungen in Echtzeit zu verfolgen
+            onSnapshot(docRef, (docSnap) => {
+                const t = window.DE_TEXTS;
+                if (docSnap.exists() && docSnap.data().mappings) {
+                    window.categoryMappings = docSnap.data().mappings;
+                    console.log("Kategorisierungsregeln geladen:", Object.keys(window.categoryMappings).length);
+                    statusElement.textContent = t.status_loaded.replace('{count}', Object.keys(window.categoryMappings).length);
+                    statusElement.classList.remove('text-blue-600');
+                    statusElement.classList.add('text-green-600');
+                    
+                    // Bei erneuter Datenladung nach dem CSV-Import: Transaktionen neu kategorisieren
+                    if (window.currentTransactions && window.currentTransactions.length > 0) {
+                        autoCategorize(window.currentTransactions);
+                        calculateAndRender(window.currentTransactions); // Neu rendern, falls nötig
+                    }
+                    // Wenn Modal offen ist, Regeln neu laden
+                    if (document.getElementById('rulesModal').style.display === 'flex') {
+                         renderRulesModal();
+                    }
+                } else {
+                    window.categoryMappings = {};
+                    console.log("Keine Kategorisierungsregeln in der DB gefunden.");
+                    statusElement.textContent = t.status_empty;
+                    statusElement.classList.remove('text-blue-600', 'text-green-600');
+                    statusElement.classList.add('text-gray-500');
+                }
+            }, (error) => {
+                console.error("Fehler beim Laden der Buchungsregeln:", error);
+                statusElement.textContent = t.status_error;
+                statusElement.classList.remove('text-blue-600');
+                statusElement.classList.add('text-red-500');
+            });
+        }
+        
+        /**
+         * Speichert eine neue Buchungsregel in Firestore.
+         * @param {string} referenceKey - Der eindeutiger Schlüssel (z.B. die gesamte Referenz).
+         * @param {Object} bookingData - { accountCode: string, vatRate: number, priority: number }
+         * @param {boolean} isRuleManagement - Wenn true, wird kein UI-Reload ausgelöst (nur für Modal-Updates)
+         */
+        async function saveCategoryMapping(referenceKey, bookingData, isRuleManagement = false) {
+            if (!window.isAuthReady || !referenceKey || !bookingData.accountCode) return;
+            // Konten-Code muss ausgewählt sein (nicht der leere Standardwert)
+            if (bookingData.accountCode === '') return; 
+            
+            const docRef = getMappingsDocRef();
+            if (!docRef) return;
+            
+            // Stelle sicher, dass die Priorität existiert (Standardwert 50)
+            const priority = bookingData.priority !== undefined ? parseInt(bookingData.priority) : 50;
+            
+            const existingData = window.categoryMappings[referenceKey] || {};
+            
+            
+            // Check if data actually changed
+            if (existingData.accountCode !== bookingData.accountCode || 
+                existingData.vatRate !== bookingData.vatRate ||
+                existingData.priority !== priority) { // NEU: Priorität prüfen
+                
+                window.categoryMappings[referenceKey] = {
+                    ...bookingData,
+                    priority: priority
+                };
+                
+                 try {
+                     // SetDoc mit merge: true
+                     await setDoc(docRef, { mappings: window.categoryMappings }, { merge: true });
+                     console.log(`Regel gespeichert: "${referenceKey}" -> ${JSON.stringify(window.categoryMappings[referenceKey])}`);
+                 } catch (error) {
+                     console.error("Fehler beim Speichern der Regel:", error);
+                 }
+            }
+        }
+        
+        /**
+         * Löscht eine Regel aus der Datenbank.
+         * @param {string} referenceKey - Der Schlüssel der zu löschenden Regel.
+         */
+        window.deleteMapping = async function(referenceKey) {
+             if (!window.isAuthReady || !referenceKey) return;
+             
+             // Temporär aus dem lokalen Objekt entfernen
+             delete window.categoryMappings[referenceKey];
+
+             const docRef = getMappingsDocRef();
+             if (!docRef) return;
+             
+             try {
+                 // Firestore erlaubt keine direkten Feldlöschungen in einer Map ohne den gesamten Pfad.
+                 // Wir müssen das gesamte Mappings-Objekt aktualisieren (da onSnapshot die Änderungen verfolgt, ist dies sicher).
+                 await setDoc(docRef, { mappings: window.categoryMappings });
+                 console.log(`Regel gelöscht: "${referenceKey}"`);
+                 // UI wird über onSnapshot aktualisiert (inkl. Modal und Transaktionstabelle)
+             } catch (error) {
+                 console.error("Fehler beim Löschen der Regel:", error);
+                 // Bei Fehler die Regel lokal wiederherstellen (optional, aber gut für UX)
+             }
+        }
+
+
+        /**
+         * Importiert und mergt neue Kategorisierungsregeln mit den bestehenden in Firestore.
+         * @param {Object} newMappings - Die aus der JSON-Datei geladenen Regeln.
+         */
+        async function importMappings(newMappings) {
+            if (!window.isAuthReady || Object.keys(newMappings).length === 0) return;
+            const docRef = getMappingsDocRef();
+            if (!docRef) return;
+            
+            // Stelle sicher, dass Priorität (falls nicht vorhanden) auf 50 gesetzt wird
+            const sanitizedNewMappings = {};
+            for (const key in newMappings) {
+                sanitizedNewMappings[key] = {
+                    ...newMappings[key],
+                    priority: newMappings[key].priority !== undefined ? parseInt(newMappings[key].priority) : 50
+                };
+            }
+            
+            // Merge imported rules with current rules (Importierte überschreiben bestehende bei gleichem Key)
+            const mergedMappings = { ...window.categoryMappings, ...sanitizedNewMappings };
+            
+            try {
+                // SetDoc mit merge: true
+                await setDoc(docRef, { mappings: mergedMappings }, { merge: true });
+                console.log(`Regel-Import erfolgreich. Neue Keys/Updates: ${Object.keys(newMappings).length}. Gesamt: ${Object.keys(mergedMappings).length}`);
+                
+                // Meldung in der UI aktualisieren
+                document.getElementById('importMessage').textContent = window.DE_TEXTS.import_success.replace('{count}', Object.keys(newMappings).length);
+                document.getElementById('importMessage').classList.remove('text-red-500');
+                document.getElementById('importMessage').classList.add('text-green-600');
+
+            } catch (error) {
+                console.error("Fehler beim Importieren der Regeln:", error);
+                document.getElementById('importMessage').textContent = window.DE_TEXTS.import_error_db;
+                document.getElementById('importMessage').classList.remove('text-green-600');
+                document.getElementById('importMessage').classList.add('text-red-500');
+            }
+            // Setze das Input-Feld zurück, um erneuten Import zu ermöglichen
+            document.getElementById('jsonFile').value = ''; 
+        }
+        
+        // Exportiere Funktionen, die im HTML-Teil verwendet werden
+        window.saveCategoryMapping = saveCategoryMapping;
+        window.updateBooking = updateBooking; 
+        window.importMappings = importMappings;
+    </script>
+    
+    <!-- Hiddener Input-Feld, um die Kamera zu triggern -->
+    <script>
+        // --- TEXT CONSTANTS (Only German) ---
+        // ******************************************************************
+        // FIX 3: window.DE_TEXTS WIRD HIER DEFINIERT UND DARF NICHT ÜBERSCHRIEBEN WERDEN
+        // ******************************************************************
+        window.DE_TEXTS = {
+            // General
+            title_main: 'Wise Buchhaltungs-Assistent (USt & SKR03 - EUR)',
+            title_badge: 'DB VERBUNDEN - EUR & USt',
+            title_subtitle: 'Das Tool bucht jetzt automatisch Umsatzsteuer-Satz und Konten-Code. Basiswährung: EUR. **Konten-Codes sind im Dropdown verfügbar.**',
+            
+            // Anleitung
+            manual_title: 'Anleitung: So funktioniert die automatisierte Buchung (Klicken zum Öffnen)',
+            man_p1_title: 'Phase 1: Regeln festlegen (Nur einmal nötig)',
+            man_p1_1: '**Wise CSV hochladen:** Klicke auf **"1. Wise CSV-Datei auswählen"**. Die Tabelle füllt sich mit Transaktionen.',
+            man_p1_2: '**Manuelle Erstbuchung:** Wähle die **erste Transaktion** eines bestimmten Händlers, die **noch nicht grün** markiert ist.',
+            man_p1_3: '**Konten-Code zuweisen:** Wähle in der Spalte **"Konten-Code"** den passenden Code aus dem Dropdown-Menü (z.B. `6550: IT-Kosten`).',
+            man_p1_4: '**USt-Satz festlegen:** Wähle im Dropdown **"USt-Satz"** den korrekten Satz, der auf deinem Beleg steht (z.B. `19.0% (Standard)`).',
+            man_p1_5: '**Regel Speichern:** Sobald du die Felder verlässt (z.B. klickst oder tippst du in ein anderes Feld), speichert das Tool diese Zuordnung automatisch und dauerhaft in deiner Datenbank.',
+            man_p1_6: '**Beleg verknüpfen:** Nutze das **grüne Kamera-Icon** (Scanfunktion DEAKTIVIERT) oder trage den Link zu deinem Cloud-Speicher in die Spalte **"Beleg-Link"** ein.',
+            man_p2_title: 'Phase 2: Die Automatisierung (Dein Alltags-Workflow)',
+            man_p2_1: '**Neue CSV hochladen:** Lade deine nächste Wise CSV hoch.',
+            man_p2_2: '**Grüne Markierung:** Alle bekannten Transaktionen (die du in Phase 1 einmal gebucht hast) werden sofort **grün markiert** und automatisch mit Konten-Code und USt-Satz versehen. **WICHTIG:** Das Tool unterstützt jetzt **Wildcard-Regeln** (`*`), die du im Regel-Management festlegen kannst!',
+            man_p2_3_lock: 'Klicken, um die automatische Buchung manuell zu korrigieren', // Kurze Beschreibung für den Lock
+            man_p2_4: '**Vollständigkeits-Check:** Überprüfe im Kasten **"Offene Buchungen"** (rot markiert), welche Transaktionen noch Konten-Codes oder Beleg-Links benötigen, und springe per Klick direkt zur Zeile.',
+            man_p3_title: 'Phase 3: USt-Report generieren',
+            man_p3_1: '**Datum filtern:** Gib im Abschnitt **"4. USt-Bericht und Filter"** das Start- und Enddatum für dein Quartal/Halbjahr ein.',
+            man_p3_2: '**Bericht erstellen:** Klicke auf **"USt-Bericht generieren"**. Bei **"Offene Buchungen"** (rot) zuerst die fehlenden Einträge prüfen!',
+            man_p3_3: '**Export:** Das Tool liefert dir eine Übersicht der **USt-Summen nach Konten-Code und Satz**, die du für deine USt-Voranmeldung verwenden kannst.',
+            
+            // Cards & Buttons
+            card_upload_title: '1. Wise CSV-Datei auswählen',
+            card_export_title: '2. Export-Optionen',
+            btn_manage_rules: 'Buchungsregeln verwalten',
+            btn_export_data: 'Transaktionsdaten (CSV) exportieren',
+            btn_export_rules: 'Buchungsregeln (JSON) exportieren',
+            export_info: 'Exportiert alle Transaktionen inkl. Konten-Code und USt.',
+            card_import_title: '3. Regeln (JSON) importieren',
+            card_summary_title: 'Finanzübersicht (Basis EUR)',
+            summary_income: 'Einnahmen gesamt',
+            summary_expense: 'Ausgaben gesamt',
+            summary_vat: 'Umsatzsteuer (Geschätzt)',
+            summary_net: 'Netto-Saldo',
+            summary_open: 'Offene Buchungen',
+            summary_open_click: '(Klicken für Details)',
+            summary_disclaimer: 'Umsatzsteuer- und Netto-Werte basieren auf der manuellen/automatischen Zuordnung und sind gerundet. Bitte vor der Steuererklärung prüfen.',
+            card_report_title: '4. USt-Bericht und Filter',
+            report_start_date: 'Startdatum (z.B. 01.01.YYYY)',
+            report_end_date: 'Enddatum (z.B. 31.03.YYYY)',
+            btn_generate_report: 'USt-Bericht generieren',
+            report_placeholder: 'Wähle einen Zeitraum und klicke auf "USt-Bericht generieren", um die Ergebnisse anzuzeigen.',
+            card_table_title: 'Detailansicht & Buchung (USt)',
+            table_subtitle: 'Wähle den **Konten-Code** und den USt-Satz, um die Buchungsregel dauerhaft zu speichern.',
+            search_placeholder: 'Suche nach Referenz oder Konten-Code...',
+            table_empty: 'Bitte lade eine Wise CSV-Datei hoch, um die Transaktionen anzuzeigen.',
+            
+            // Table Headers
+            th_date: 'Datum',
+            th_ref: 'Beschreibung (Referenz)',
+            th_orig_currency: 'Original Währung',
+            th_amount_brutto: 'Betrag (Brutto)',
+            th_account_code: 'Konten-Code',
+            th_vat_rate: 'USt-Satz',
+            th_net: 'Netto (EUR)',
+            th_vat: 'USt (EUR)',
+            th_receipt: 'Beleg-Link (Kamera)',
+            th_saldo: 'Saldo',
+            th_priority: 'Priorität',
+            
+            // Modal
+            modal_title: 'Buchungsregeln verwalten',
+            modal_actions: 'Aktionen',
+            btn_close: 'Schließen',
+            btn_save: 'Speichern',
+            btn_delete: 'Löschen',
+            rules_count: '{count} Regeln gespeichert',
+            rules_empty: 'Keine Regeln vorhanden.',
+            
+            // Completeness Check Modal
+            check_modal_title: 'Offene Buchungen & Prüfungsliste',
+            check_status_ok: '✅ Alle ({count}) Transaktionen sind vollständig gebucht und belegt.',
+            check_status_open: '⚠️ {count} Transaktionen sind unvollständig und müssen geprüft werden.',
+            check_missing: 'Fehlende Info',
+            check_missing_account: 'Konten-Code',
+            check_missing_receipt: 'Beleg-Link (Ausgabe)',
+            check_action_jump: 'Zur Transaktion springen',
+
+
+            // Status Messages
+            status_loading: 'Lade Buchungsregeln...',
+            status_loaded: 'Automatisierungsregeln geladen ({count} Regeln).',
+            status_empty: 'Keine Automatisierungsregeln gefunden. Manuelle Buchung startet die Speicherung.',
+            status_error: 'Fehler beim Laden der DB-Regeln. Buchung ist nur manuell möglich.',
+            booking_locked: 'Gesperrt',
+            booking_rule_applied: 'Regel gebucht',
+            
+            // KI
+            btn_ki_suggestion: 'KI-Vorschlag',
+            btn_ki_suggestion_tooltip: 'KI-Vorschlag für Konten-Code und USt-Satz generieren (Gemini KI).',
+            ki_loading: 'KI analysiert...',
+            ki_success: 'KI-Vorschlag angewendet. Bitte prüfen!',
+            ki_error: 'KI-Analyse fehlgeschlagen. Bitte manuell buchen.',
+            
+            // Chat
+            chat_title: 'KI-Buchhaltungs-Assistent',
+
+            // USt & Konten-Code Labels (SKR03)
+            vat_rate_select: '— USt-Satz wählen —',
+            vat_rate_0: '0.0% (Export/USt-befreit)',
+            vat_rate_19: '19.0% (Standard)',
+            vat_rate_7: '7.0% (Ermäßigt)',
+            
+            acc_code_select: '— Konten-Code wählen —',
+            acc_3400: '3400: Erlöse 19% USt (SKR03)',
+            acc_3800: '3800: Erlöse 7% USt (SKR03)',
+            acc_4900: '4900: Sonstige betr. Erträge (SKR03)',
+            acc_4500: '4500: Löhne und Gehälter (SKR03)',
+            acc_4540: '4540: Gesetzliche soziale Aufwendungen (SKR03)',
+            acc_4600: '4600: Reisekosten Arbeitnehmer (SKR03)',
+            acc_4800: '4800: Sonstige betr. Aufwendungen (SKR03)',
+            acc_4940: '4940: Buchführungskosten (Steuerberater, Software) (SKR03)',
+            acc_4970: '4970: Rechts- und Beratungskosten (SKR03)',
+            acc_6810: '6810: Miete/Pacht (Unbewegliche Wirtschaftsgüter) (SKR03)',
+            // Hinweis: Im SKR03 beginnen Kosten oft mit 4x, Wareneingang 3200
+            acc_3200: '3200: Wareneingang (SKR03)',
+            acc_4210: '4210: Fremdarbeiten (SKR03)',
+            acc_4290: '4290: Sonstige Kosten der Warenabgabe (SKR03)',
+
+
+            // Other Messages
+            msg_temp_receipt: '[DATEI ERFASST: {filename}]',
+            msg_temp_receipt_status: 'Datei ausgewählt. Bitte Link für permanenten Export einfügen.',
+            msg_file_error: 'Fehler beim Verarbeiten der Datei: ',
+            import_success: '✅ {count} Regeln erfolgreich importiert/aktualisiert.',
+            import_error_db: 'Fehler beim Speichern der importierten Regeln in der Datenbank.',
+            
+        };
+        // *** ENTFERNT: window.DE_TEXTS = window.texts.de; ***
+        
+        window.currentLang = 'de';
+        window.chatHistory = []; // NEU: Speichert den Chatverlauf
+
+        // --- CHAT LOGIC START ---
+
+        window.openChatModal = function() {
+            document.getElementById('chatModal').style.display = 'flex';
+            renderChat();
+            document.getElementById('chatInput').focus();
+        };
+
+        window.closeChatModal = function() {
+            document.getElementById('chatModal').style.display = 'none';
+        };
+
+        function renderChat() {
+            const messagesContainer = document.getElementById('chatMessages');
+            messagesContainer.innerHTML = '';
+            
+            // Render from newest to oldest (because messagesContainer is flex-direction: column-reverse)
+            window.chatHistory.slice().reverse().forEach(msg => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = msg.role === 'user' ? 'user-message' : 'ai-message';
+                messageDiv.innerHTML = msg.text.replace(/\n/g, '<br>'); // Zeilenumbrüche für HTML
+
+                // Füge das KI-Icon nur bei der KI-Antwort hinzu
+                if (msg.role !== 'user') {
+                     messageDiv.innerHTML = `
+                         <div class="flex items-start space-x-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-600 flex-shrink-0 mt-1" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 7a.75.75 0 00-1.5 0v5.25l-3.25 1.75a.75.75 0 00.75 1.372l3.75-2a.75.75 0 00.75-.75V7z" clip-rule="evenodd" /></svg>
+                            <div class="flex-grow">${messageDiv.innerHTML}</div>
+                         </div>
+                     `;
+                }
+
+                messagesContainer.appendChild(messageDiv);
+            });
+            // messagesContainer.scrollTop = messagesContainer.scrollHeight; // Auto-scroll funktioniert wegen column-reverse nicht intuitiv
+        }
+        
+        // Fügt eine Ladeanzeige hinzu
+        function showLoading() {
+            const messagesContainer = document.getElementById('chatMessages');
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'aiLoadingIndicator';
+            loadingDiv.className = 'ai-message p-3 text-sm text-gray-500 flex items-center space-x-2';
+            loadingDiv.innerHTML = `
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                ${window.DE_TEXTS.ki_loading}
+            `;
+            messagesContainer.prepend(loadingDiv); // Hinzufügen, damit es ganz oben (unten im Viewport) ist
+        }
+
+        function hideLoading() {
+            const loadingDiv = document.getElementById('aiLoadingIndicator');
+            if (loadingDiv) {
+                loadingDiv.remove();
+            }
+        }
+        
+        /**
+         * Erstellt den Kontext für die KI (Regeln, Codes, Status).
+         */
+        function getChatContext() {
+            const t = window.DE_TEXTS;
+            let context = `Du bist ein erfahrener Buchhaltungsassistent spezialisiert auf DEUTSCHE KMU (SKR03 Kontenrahmen in DE). Antworte auf Deutsch. Nutze NUR die bereitgestellten Informationen, um Fragen zu beantworten, Fehler zu finden oder die Buchung zu erklären.
+
+--- DATENKONTEXT ---
+
+1. Verfügbare Konten-Codes (Code: Beschreibung):
+${GERMAN_ACCOUNT_CODES.filter(a => a.code).map(a => `${a.code}: ${t[a.key]}`).join('\n')}
+
+2. Verfügbare USt-Sätze (Rate: Beschreibung):
+${GERMAN_VAT_RATES.map(r => `${r.rate}%: ${t[r.key]}`).join('\n')}
+
+3. Gespeicherte Buchungsregeln (Wildcard * möglich) (Referenz -> {Code, Rate, Priorität}):
+${Object.keys(window.categoryMappings).length > 0 ? 
+    Object.keys(window.categoryMappings).map(key => 
+        `"${key}" -> {Code: ${window.categoryMappings[key].accountCode}, Rate: ${window.categoryMappings[key].vatRate}%, Priorität: ${window.categoryMappings[key].priority}}`
+    ).join('\n')
+    : 'Keine Regeln gespeichert.'}
+
+4. Offene Buchungen (müssen manuell geprüft/ergänzt werden):
+${window.openBookings.length > 0 ? 
+    window.openBookings.map(b => 
+        `- Transaktion: "${b.reference}", Fehlend: [${b.missingFields}]`
+    ).join('\n')
+    : 'Alle Transaktionen sind vollständig gebucht oder es wurde keine CSV geladen.'}
+
+--- ENDE DATENKONTEXT ---
+
+Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezogen sein. Nutze die Daten oben für deine Analysen. Wenn Daten fehlen, sage, dass du die CSV laden oder die Regeln speichern sollst.`;
+
+            return context;
+        }
+
+        window.handleChatSubmit = function() {
+            const inputElement = document.getElementById('chatInput');
+            const message = inputElement.value.trim();
+
+            if (!message) return;
+
+            inputElement.value = '';
+            inputElement.disabled = true;
+            document.getElementById('chatSendButton').disabled = true;
+
+            // 1. Benutzer-Nachricht zur Historie hinzufügen und rendern
+            window.chatHistory.unshift({ role: 'user', text: message });
+            renderChat();
+            showLoading();
+
+            // 2. KI-Antwort senden
+            sendChatMessage(message).finally(() => {
+                hideLoading();
+                inputElement.disabled = false;
+                document.getElementById('chatSendButton').disabled = false;
+                inputElement.focus();
+                renderChat();
+            });
+        };
+
+        async function sendChatMessage(userMessage) {
+            const context = getChatContext();
+            
+            const systemPrompt = context;
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userMessage }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                }
+            };
+
+            const MAX_RETRIES = 3;
+            for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`API returned status ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const aiText = result.candidates?.[0]?.content?.parts?.[0]?.text || 'Entschuldigung, ich konnte keine gültige Antwort generieren.';
+                    
+                    window.chatHistory.unshift({ role: 'ai', text: aiText });
+                    return;
+
+                } catch (error) {
+                    if (attempt < MAX_RETRIES - 1) {
+                        const delay = Math.pow(2, attempt) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    } else {
+                        const errorMessage = `Entschuldigung, die Verbindung zum KI-Assistenten ist fehlgeschlagen. Fehler: ${error.message}`;
+                        window.chatHistory.unshift({ role: 'ai', text: errorMessage });
+                        throw error;
+                    }
+                }
+            }
+        }
+
+        // --- CHAT LOGIC END ---
+
+        /**
+         * Die Funktion switchLanguage wurde entfernt, da das Tool nur noch Deutsch verwendet.
+         */
+        window.switchLanguage = function(lang) {
+            // Placeholder: Do nothing as language is hardcoded to DE
+            console.log(`Sprachwechsel ignoriert: Tool ist auf Deutsch hartcodiert.`);
+        }
+
+
+        // Configuration and State 
+        const BASE_CURRENCY = 'EUR'; // Geändert von CHF auf EUR für Deutschland
+        
+        // Gängige DEUTSCHE USt-Sätze (nutzen Keys für die Übersetzung)
+        const GERMAN_VAT_RATES = [
+            { rate: 0.0, key: 'vat_rate_0' },
+            { rate: 19.0, key: 'vat_rate_19' }, // Standard
+            { rate: 7.0, key: 'vat_rate_7' }    // Reduziert
+        ];
+        
+        // Gängige DEUTSCHE SKR03 Konten-Codes
+        const GERMAN_ACCOUNT_CODES = [
+            { code: '', key: 'acc_code_select' },
+            // 1. Erträge (Einnahmen)
+            { code: '3400', key: 'acc_3400' }, // Erlöse 19%
+            { code: '3800', key: 'acc_3800' }, // Erlöse 7%
+            { code: '4900', key: 'acc_4900' }, // Sonstige betr. Erträge
+            // 2. Betrieblicher Aufwand (Ausgaben) - SKR03 beginnt meist mit 4er-Klassen
+            { code: '4500', key: 'acc_4500' }, // Löhne und Gehälter
+            { code: '4540', key: 'acc_4540' }, // Soziale Aufwendungen
+            { code: '4600', key: 'acc_4600' }, // Reisekosten
+            { code: '4800', key: 'acc_4800' }, // Sonstige betr. Aufwendungen
+            { code: '4940', key: 'acc_4940' }, // Buchführungskosten (Steuerberater, Software)
+            { code: '4970', key: 'acc_4970' }, // Rechts- und Beratungskosten
+            { code: '6810', key: 'acc_6810' }, // Miete/Pacht
+            // 3. Wareneingang und Dienstleistungen
+            { code: '3200', key: 'acc_3200' }, // Wareneingang
+            { code: '4210', key: 'acc_4210' }, // Fremdarbeiten
+            { code: '4290', key: 'acc_4290' }, // Sonstige Kosten der Warenabgabe
+        ];
+
+        const SWISS_VAT_RATES = GERMAN_VAT_RATES; // Alias für die Kompatibilität
+        const SWISS_ACCOUNT_CODES = GERMAN_ACCOUNT_CODES; // Alias für die Kompatibilität
+
+
+        // Führt die MWST-Berechnung durch (Brutto > Netto + MWST)
+        function calculateVAT(bruttoAmount, vatRate) {
+            const absBrutto = Math.abs(bruttoAmount);
+            if (vatRate === 0 || absBrutto === 0) {
+                return { netAmount: absBrutto, vatAmount: 0 };
+            }
+            
+            const rateFactor = vatRate / 100;
+            // Netto = Brutto / (1 + RateFactor)
+            let netAmount = absBrutto / (1 + rateFactor);
+            let vatAmount = absBrutto - netAmount;
+
+            // Runden auf 2 Dezimalstellen
+            netAmount = Math.round(netAmount * 100) / 100;
+            vatAmount = Math.round(vatAmount * 100) / 100;
+
+            // Wichtig: Wenn Brutto negativ ist (Ausgabe), müssen Netto und MWST auch negativ sein
+            if (bruttoAmount < 0) {
+                netAmount = -netAmount;
+                vatAmount = -vatAmount;
+            }
+
+            return { netAmount, vatAmount };
+        }
+
+
+        let currentReceiptIndex = -1; 
+
+        // Fügt den versteckten Input-Feld-Trigger hinzu, sobald das Dokument geladen ist
+        document.addEventListener('DOMContentLoaded', () => {
+            const hiddenFileInput = document.createElement('input');
+            hiddenFileInput.type = 'file';
+            hiddenFileInput.id = 'hiddenReceiptFileInput';
+            hiddenFileInput.style.display = 'none';
+            hiddenFileInput.setAttribute('accept', 'image/*'); 
+            hiddenFileInput.setAttribute('capture', 'camera'); 
+            hiddenFileInput.onchange = handleReceiptCapture;
+            document.body.appendChild(hiddenFileInput);
+            
+            // Initialisiere Sprache (Kein Switcher mehr nötig)
+            // window.switchLanguage(document.getElementById('languageSwitcher').value); 
+            
+            // NEU: Füge Event Listener für Enter-Taste im Chat hinzu
+            document.getElementById('chatInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    window.handleChatSubmit();
+                }
+            });
+        });
+        
+        // --- CORE LOGIC START ---
+
+        /**
+         * NEU: Ruft die Gemini API auf, um einen Buchungsvorschlag zu erhalten.
+         * @param {string} referenceText - Der Text zur Analyse.
+         * @returns {Promise<{accountCode: string, vatRate: number}|null>}
+         */
+        window.callGeminiForSuggestion = async function(referenceText) {
+            // System Prompt auf DEUTSCHEN SKR03 und USt angepasst
+            const systemPrompt = `Act as a German tax accountant specializing in KMU bookkeeping (SKR03). Your task is to analyze a raw Wise transaction reference and provide the most likely SKR03 Account Code and the applicable German VAT rate (Umsatzsteuer-Satz). Base currency is EUR. The account codes must be one of the following: ${GERMAN_ACCOUNT_CODES.map(a => a.code).filter(c => c)}. The VAT rate must be one of: 0.0, 19.0, 7.0. For services/subscriptions from non-EU companies, assume reverse charge (Reverse-Charge/§13b UStG) and return the standard German input VAT rate (19.0). If the transaction is a bank fee or interest, use 4800/4900 and 0.0% VAT. Output MUST be a single JSON object.`;
+            const userQuery = `Analyze this Wise transaction reference for KMU German bookkeeping (SKR03) and suggest the account code and VAT rate: "${referenceText}"`;
+            
+            const apiKey = ""; // Canvas will provide this key in runtime
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            "accountCode": { "type": "STRING", "description": "Suggested SKR03 Konten-Code (e.g., 4940)" },
+                            "vatRate": { "type": "NUMBER", "description": "Suggested German VAT rate (e.g., 19.0 or 7.0)" }
+                        },
+                        "propertyOrdering": ["accountCode", "vatRate"]
+                    }
+                }
+            };
+            
+            const MAX_RETRIES = 3;
+            for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (!response.ok) {
+                        const errorBody = await response.text();
+                        console.error(`Gemini API Error (Status ${response.status}):`, errorBody);
+                        throw new Error(`API returned status ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    
+                    const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (jsonText) {
+                        const parsedJson = JSON.parse(jsonText);
+                        
+                        // Validierung der KI-Antwort
+                        const validAccountCode = GERMAN_ACCOUNT_CODES.some(a => a.code === parsedJson.accountCode);
+                        const validVatRate = GERMAN_VAT_RATES.some(r => r.rate === parsedJson.vatRate);
+                        
+                        if (validAccountCode && validVatRate) {
+                            return {
+                                accountCode: parsedJson.accountCode,
+                                vatRate: parsedJson.vatRate
+                            };
+                        } else {
+                            console.warn("KI-Vorschlag ungültig oder außerhalb der definierten Codes:", parsedJson);
+                            throw new Error("Invalid KI suggestion.");
+                        }
+                    }
+                    
+                    throw new Error("KI response structure invalid.");
+
+                } catch (error) {
+                    if (attempt < MAX_RETRIES - 1) {
+                        const delay = Math.pow(2, attempt) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    } else {
+                        throw error;
+                    }
+                }
+            }
+            return null;
+        };
+
+
+        /**
+         * NEU: Ruft die KI auf und wendet den Vorschlag auf die Transaktion an.
+         */
+        window.applySuggestion = async function(buttonElement, index) {
+            const tx = window.currentTransactions[index];
+            const t = window.DE_TEXTS;
+            const originalText = buttonElement.textContent;
+            
+            buttonElement.textContent = t.ki_loading;
+            buttonElement.disabled = true;
+
+            try {
+                const suggestion = await window.callGeminiForSuggestion(tx.reference);
+                
+                if (suggestion) {
+                    // Update the transaction object
+                    tx.accountCode = suggestion.accountCode;
+                    tx.vatRate = suggestion.vatRate;
+
+                    // Update the UI controls directly to show the suggestion
+                    const accSelect = document.getElementById(`accSelect_${index}`);
+                    const vatSelect = document.getElementById(`vatSelect_${index}`);
+                    
+                    if (accSelect) accSelect.value = suggestion.accountCode;
+                    if (vatSelect) vatSelect.value = suggestion.vatRate.toString();
+                    
+                    // Trigger the updateBooking logic to recalculate VAT/Net and save the rule
+                    // We simulate a change event on the account select to trigger saving and rendering
+                    const simulatedEvent = { target: accSelect || { getAttribute: () => null } };
+                    
+                    // Wenn kein accSelect vorhanden ist (Sollte nicht passieren), speichern wir direkt
+                    if (!accSelect) {
+                        tx.isAutoBooked = true; 
+                        tx.isManualOverride = false;
+                        window.saveCategoryMapping(tx.reference.trim(), { accountCode: tx.accountCode, vatRate: tx.vatRate, priority: 50 });
+                        calculateAndRender(window.currentTransactions);
+                    } else {
+                         // updateBooking macht das Speichern, Neurendern und Sperren
+                        updateBooking(simulatedEvent); 
+                    }
+                    
+                    // Finales UI Feedback
+                    buttonElement.textContent = '✅';
+                    buttonElement.classList.add('bg-green-600');
+                    buttonElement.classList.remove('bg-indigo-600');
+                    buttonElement.title = t.ki_success;
+
+                } else {
+                    throw new Error("KI returned no valid suggestion.");
+                }
+            } catch (error) {
+                console.error("KI-Fehler:", error);
+                
+                // Finales UI Feedback bei Fehler
+                buttonElement.textContent = '❌';
+                buttonElement.classList.add('bg-red-600');
+                buttonElement.classList.remove('bg-indigo-600');
+                buttonElement.title = t.ki_error;
+
+            } finally {
+                // Button nach kurzer Verzögerung wieder auf Originalzustand setzen (außer bei Erfolg/Fehler-Icons)
+                if (buttonElement.textContent === t.ki_loading) {
+                    buttonElement.textContent = originalText;
+                    buttonElement.disabled = false;
+                }
+            }
+        };
+
+
+        /**
+         * NEU: Prüft, ob eine Referenz auf eine Wildcard-Regel passt.
+         * @param {string} reference - Die Transaktionsreferenz.
+         * @param {string} mappingKey - Der Regel-Schlüssel (kann '*' enthalten).
+         * @returns {boolean}
+         */
+        function wildcardMatch(reference, mappingKey) {
+            if (!mappingKey.includes('*')) {
+                return reference.trim() === mappingKey.trim();
+            }
+            // Escapiere spezielle Regex-Zeichen außer '*'
+            let pattern = mappingKey.trim().replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+            // Ersetze '*' durch '.*' für Regex-Matching (null oder mehr beliebige Zeichen)
+            pattern = pattern.replace(/\*/g, '.*');
+            
+            // Erzeuge Regex-Objekt, case-insensitive
+            const regex = new RegExp(`^${pattern}$`, 'i');
+            return regex.test(reference.trim());
+        }
+
+
+        /**
+         * Führt die automatische Buchung basierend auf den geladenen Regeln durch.
+         * @param {Array<Object>} transactions - Die Transaktionen, die gebucht werden sollen.
+         */
+        function autoCategorize(transactions) {
+            if (!window.categoryMappings || Object.keys(window.categoryMappings).length === 0) {
+                return 0;
+            }
+            
+            let bookedCount = 0;
+            const mappings = window.categoryMappings;
+            const t = window.DE_TEXTS;
+            
+            // NEU: Sortiere die Keys zuerst nach Priorität (niedriger Wert = höhere Priorität), dann alphabetisch
+            const mappingKeys = Object.keys(mappings).sort((a, b) => {
+                const priorityA = mappings[a].priority !== undefined ? mappings[a].priority : 50;
+                const priorityB = mappings[b].priority !== undefined ? mappings[b].priority : 50;
+                
+                if (priorityA !== priorityB) {
+                    return priorityA - priorityB; // Niedrigere Zahl gewinnt
+                }
+                return a.localeCompare(b); // Bei gleicher Priorität alphabetisch sortieren
+            }); 
+
+            transactions.forEach(tx => {
+                const reference = tx.reference.trim();
+                
+                // Setze isManualOverride und auto-booked Status zurück
+                tx.isManualOverride = false;
+                tx.isAutoBooked = false; 
+
+                // 1. Suche nach einer passenden Regel (Wildcard oder Exakt)
+                let foundKey = null;
+                
+                // Iteriere durch alle Keys und prüfe den Match
+                for (const key of mappingKeys) {
+                    if (wildcardMatch(reference, key) && mappings[key].accountCode) {
+                        foundKey = key;
+                        break; // Erste passende Regel (die höchste Priorität hat) verwenden
+                    }
+                }
+                
+                if (foundKey) {
+                    const data = mappings[foundKey];
+                    tx.accountCode = data.accountCode;
+                    // MWST-Satz aus der DB übernehmen, Fallback auf 0.0 wenn fehlt
+                    tx.vatRate = data.vatRate !== undefined ? data.vatRate : 0.0; 
+                    
+                    // MWST/Netto sofort berechnen
+                    const { netAmount, vatAmount } = calculateVAT(tx.amount, tx.vatRate);
+                    tx.netAmount = netAmount;
+                    tx.vatAmount = vatAmount;
+
+                    tx.isAutoBooked = true;
+                    bookedCount++;
+                } else {
+                     // Wenn keine Regel gefunden wird, Felder zurücksetzen
+                     tx.accountCode = '';
+                     tx.vatRate = 0.0;
+                     tx.netAmount = tx.amount;
+                     tx.vatAmount = 0.0;
+                }
+            });
+            
+            // Aktualisiere Status und UI
+            const statusElement = document.getElementById('autoBookingStatus');
+
+            if (bookedCount > 0) {
+                 statusElement.textContent = t.status_loaded.replace('{count}', bookedCount);
+                 statusElement.classList.remove('text-gray-500', 'text-red-500', 'text-blue-600');
+                 statusElement.classList.add('text-green-700', 'font-bold');
+            } else if (Object.keys(mappings).length > 0) {
+                 statusElement.textContent = t.status_loaded.replace('{count}', Object.keys(mappings).length);
+                 statusElement.classList.remove('text-green-700', 'font-bold');
+                 statusElement.classList.add('text-gray-500');
+            } else {
+                 statusElement.textContent = t.status_empty;
+                 statusElement.classList.remove('text-green-700', 'font-bold');
+                 statusElement.classList.add('text-gray-500');
+            }
+
+            return bookedCount;
+        }
+
+
+        /**
+         * Verarbeitet die Kameraaufnahme oder Dateiauswahl.
+         */
+        function handleReceiptCapture(event) {
+            if (currentReceiptIndex === -1 || event.target.files.length === 0) {
+                // Wenn die Auswahl abgebrochen oder das Feld zurückgesetzt wurde.
+                currentReceiptIndex = -1;
+                event.target.value = null;
+                return;
+            }
+
+            try {
+                const file = event.target.files[0];
+                const tx = window.currentTransactions[currentReceiptIndex];
+                const t = window.DE_TEXTS;
+
+                // QR-Scan-Logik entfernt, da instabil. Verwende nur den stabilen Platzhalter-Link
+                tx.receiptLink = t.msg_temp_receipt.replace('{filename}', file.name); 
+                tx.receiptStatus = t.msg_temp_receipt_status;
+
+                // Update the input field in the table
+                const inputElement = document.getElementById(`receiptInput_${currentReceiptIndex}`);
+                if (inputElement) {
+                    inputElement.value = tx.receiptLink;
+                }
+                
+                // Update the status message
+                const statusElement = document.getElementById(`receiptStatus_${currentReceiptIndex}`);
+                if (statusElement) {
+                    statusElement.textContent = tx.receiptStatus;
+                    statusElement.classList.remove('text-gray-500', 'text-red-500');
+                    statusElement.classList.add('text-green-600', 'font-semibold');
+                }
+                
+                // Vollständigkeitsprüfung aktualisieren, da jetzt ein Link (temporär) vorhanden ist
+                if (window.currentTransactions) {
+                    checkCompleteness(window.currentTransactions);
+                }
+
+            } catch (error) {
+                console.error("FEHLER bei der Quittungserfassung:", error);
+                // Setze den Status auf einen Fehler, falls etwas schief geht
+                const statusElement = document.getElementById(`receiptStatus_${currentReceiptIndex}`);
+                 if (statusElement) {
+                    statusElement.textContent = window.DE_TEXTS.msg_file_error + "Bitte Link manuell einfügen.";
+                    statusElement.classList.remove('text-green-600');
+                    statusElement.classList.add('text-red-600');
+                }
+            } finally {
+                // Reset regardless of success or failure
+                currentReceiptIndex = -1;
+                event.target.value = null; 
+            }
+        }
+
+
+        window.triggerReceiptCapture = function(index) {
+            currentReceiptIndex = index;
+            document.getElementById('hiddenReceiptFileInput').click();
+        }
+
+        // Helper function to escape strings for CSV (handles commas/quotes)
+        function escapeCSV(value) {
+            if (value === null || value === undefined) return '';
+            const str = String(value);
+            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+        }
+
+        /**
+         * Parses the uploaded CSV file content.
+         */
+        function parseCSV(csvText) {
+            const transactions = [];
+            const lines = csvText.trim().split('\n');
+            const t = window.DE_TEXTS;
+            if (lines.length < 2) {
+                throw new Error(t.msg_file_error + 'CSV-Datei ist leer oder enthält nur Header.');
+            }
+
+            // Analyze header row (first line)
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            
+            // Check required headers
+            const requiredHeaders = ['Date', 'Amount', 'Currency', 'Reference'];
+            for (const req of requiredHeaders) {
+                if (!headers.includes(req)) {
+                    if (req === 'Reference' && headers.includes('Details')) continue;
+                    throw new Error(t.msg_file_error + `Fehlender obligatorischer Header: '${req}'. Stellen Sie sicher, dass Sie die Wise 'Activities' CSV verwenden.`);
+                }
+            }
+            
+            // Parse data rows
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); 
+
+                if (values.length !== headers.length) continue; 
+
+                const row = {};
+                headers.forEach((header, index) => {
+                    row[header.replace(/"/g, '').trim()] = values[index].replace(/"/g, '').trim();
+                });
+
+                const amount = parseFloat(row['Amount']);
+                if (!isNaN(amount) && amount !== 0) {
+                    transactions.push({
+                        date: row['Date'],
+                        reference: row['Reference'] || row['Details'] || 'N/A', 
+                        amount: amount,
+                        currency: row['Currency'],
+                        // NEUE FELDER FÜR BUCHHALTUNG
+                        accountCode: '', 
+                        vatRate: 0.0, // Standard-MWST-Satz auf 0 setzen
+                        netAmount: amount, // Default: Brutto = Netto
+                        vatAmount: 0.0,
+                        isManualOverride: false, // NEU: Steuert das manuelle Entsperren
+                        // ENDE NEUE FELDER
+                        receiptLink: '', 
+                        receiptStatus: '', 
+                        isAutoBooked: false, 
+                        originalIndex: i - 1 // Index in der gefilterten, sortierten Liste
+                    });
+                }
+            }
+
+            transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+            return transactions;
+        }
+
+        /**
+         * Main function to process the uploaded file.
+         */
+        window.handleFileUpload = function(event) {
+            const file = event.target.files[0];
+            const messageElement = document.getElementById('uploadMessage');
+            const t = window.DE_TEXTS;
+            messageElement.classList.add('hidden'); 
+            document.getElementById('exportButton').disabled = true;
+
+            if (!file) {
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const csvText = e.target.result;
+                    window.currentTransactions = parseCSV(csvText);
+                    
+                    autoCategorize(window.currentTransactions);
+                    
+                    calculateAndRender(window.currentTransactions);
+                    document.getElementById('exportButton').disabled = false; 
+                } catch (error) {
+                    messageElement.textContent = error.message;
+                    messageElement.classList.remove('hidden');
+                    document.getElementById('transactionTableBody').innerHTML = `
+                        <tr><td colspan="10" class="px-6 py-4 text-center text-red-500">${error.message}</td></tr>
+                    `;
+                    document.getElementById('totalIncome').textContent = '0.00 EUR';
+                    document.getElementById('totalExpense').textContent = '0.00 EUR';
+                    document.getElementById('netBalance').textContent = '0.00 EUR';
+                    document.getElementById('totalVAT').textContent = '0.00 EUR';
+
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        /**
+         * Verarbeitet die hochgeladene JSON-Datei mit Buchungsregeln.
+         */
+        window.handleJSONImport = function(event) {
+            const file = event.target.files[0];
+            const messageElement = document.getElementById('importMessage');
+            const t = window.DE_TEXTS;
+            messageElement.textContent = t.status_loading;
+            messageElement.classList.remove('text-red-500', 'text-green-600');
+            
+            if (!file) {
+                messageElement.textContent = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const jsonText = e.target.result;
+                    const importedMappings = JSON.parse(jsonText);
+                    
+                    if (typeof importedMappings !== 'object' || Array.isArray(importedMappings) || Object.keys(importedMappings).length === 0) {
+                        throw new Error(t.msg_file_error + "Ungültiges JSON-Format oder leere Datei. Erwarte ein Objekt.");
+                    }
+
+                    window.importMappings(importedMappings);
+                    
+                } catch (error) {
+                    messageElement.textContent = error.message;
+                    messageElement.classList.remove('text-green-600');
+                    messageElement.classList.add('text-red-500');
+                    document.getElementById('jsonFile').value = ''; 
+                }
+            };
+            reader.onerror = () => {
+                 messageElement.textContent = t.msg_file_error + 'Fehler beim Lesen der Datei.';
+                 messageElement.classList.remove('text-green-600');
+                 messageElement.classList.add('text-red-500');
+                 document.getElementById('jsonFile').value = ''; 
+            };
+            reader.readAsText(file);
+        }
+        
+        /**
+         * Schaltet den manuellen Override-Modus für eine Zeile um.
+         */
+        window.toggleLock = function(index) {
+            if (index >= 0 && index < window.currentTransactions.length) {
+                const tx = window.currentTransactions[index];
+                // isManualOverride = true bedeutet entsperrt (unlocked)
+                tx.isManualOverride = !tx.isManualOverride; 
+                // Neu rendern, um den Status sofort anzuzeigen (mit entsperrten Dropdowns)
+                calculateAndRender(window.currentTransactions);
+            }
+        };
+
+        /**
+         * NEU: Führt die Vollständigkeitsprüfung durch
+         */
+        function checkCompleteness(transactions) {
+            window.openBookings = [];
+            const t = window.DE_TEXTS;
+            
+            transactions.forEach((tx, index) => {
+                const missing = [];
+                const isExpense = tx.amount < 0;
+
+                // 1. Fehlt der Konten-Code?
+                if (!tx.accountCode || tx.accountCode === '') {
+                    missing.push(t.check_missing_account);
+                }
+
+                // 2. Ist es eine Ausgabe und fehlt der Beleg-Link?
+                const isTempLink = tx.receiptLink.startsWith(t.msg_temp_receipt.split(':')[0]);
+                if (isExpense && (!tx.receiptLink || isTempLink)) {
+                     missing.push(t.check_missing_receipt);
+                }
+
+                if (missing.length > 0) {
+                    window.openBookings.push({
+                        date: tx.date,
+                        reference: tx.reference,
+                        missingFields: missing.join(', '),
+                        indexInTable: index
+                    });
+                }
+            });
+            
+            // Update Counter
+            const countElement = document.getElementById('openBookingsCount');
+            if (countElement) {
+                countElement.textContent = window.openBookings.length;
+                countElement.classList.remove('text-green-600', 'text-gray-800', 'text-red-600');
+                if (window.openBookings.length > 0) {
+                    countElement.classList.add('text-red-600');
+                } else if (transactions.length > 0) {
+                    countElement.classList.add('text-green-600');
+                } else {
+                     countElement.classList.add('text-gray-800');
+                }
+            }
+            return window.openBookings.length;
+        }
+
+
+        /**
+         * Calculates balances and re-renders the UI, applying filters first.
+         */
+        function calculateAndRender(transactions) {
+            const tableBody = document.getElementById('transactionTableBody');
+            tableBody.innerHTML = ''; 
+            const t = window.DE_TEXTS;
+            
+            // *** 1. FILTERING ***
+            const searchTerm = (document.getElementById('searchInput')?.value || '').toLowerCase();
+            const filteredTransactions = transactions.filter(tx => {
+                if (!searchTerm) return true;
+                const reference = tx.reference.toLowerCase();
+                const accountCode = tx.accountCode.toLowerCase();
+                return reference.includes(searchTerm) || accountCode.includes(searchTerm);
+            });
+            // *** END FILTERING ***
+
+            let runningBalance = 0;
+            let totalIncome = 0;
+            let totalExpense = 0;
+            let totalVAT = 0;
+
+            filteredTransactions.forEach((tx, index) => {
+                const amount = tx.amount;
+                
+                // Aktualisiere MWST/Netto-Beträge für das Rendering
+                const { netAmount, vatAmount } = calculateVAT(amount, tx.vatRate);
+                tx.netAmount = netAmount;
+                tx.vatAmount = vatAmount;
+                tx.tableIndex = index; // Setze den Index in der aktuell gefilterten Tabelle
+
+                runningBalance += amount; // Laufender Saldo basiert auf Brutto-Betrag
+                totalVAT += vatAmount;
+
+                if (netAmount > 0) {
+                    totalIncome += netAmount; // Einnahmen basieren auf Netto-Betrag
+                } else {
+                    totalExpense += netAmount; // Ausgaben basieren auf Netto-Betrag
+                }
+
+                const row = document.createElement('tr');
+                // NEU: ID für den Jump-Link
+                row.id = `tx-row-${tx.tableIndex}`; 
+                
+                const amountClass = amount > 0 ? 'income' : 'expense';
+                
+                // NEU: Sperrstatus bestimmen
+                const isDisabled = tx.isAutoBooked && !tx.isManualOverride;
+                const disabledAttr = isDisabled ? 'disabled' : '';
+                const selectClass = isDisabled ? ' select-disabled' : '';
+
+
+                if (tx.isAutoBooked) {
+                     row.classList.add('auto-booked');
+                }
+                
+                const formattedAmount = new Intl.NumberFormat('de-DE', { style: 'currency', currency: tx.currency, minimumFractionDigits: 2 }).format(amount);
+                const formattedRunningBalance = new Intl.NumberFormat('de-DE', { style: 'currency', currency: BASE_CURRENCY, minimumFractionDigits: 2 }).format(runningBalance);
+                const formattedNetAmount = new Intl.NumberFormat('de-DE', { style: 'currency', currency: BASE_CURRENCY, minimumFractionDigits: 2 }).format(tx.netAmount);
+                const formattedVatAmount = new Intl.NumberFormat('de-DE', { style: 'currency', currency: BASE_CURRENCY, minimumFractionDigits: 2 }).format(tx.vatAmount);
+                
+                // NEU: Original Währung Formatierung
+                const isForeignCurrency = tx.currency !== BASE_CURRENCY;
+                const formattedOriginalAmount = isForeignCurrency 
+                    ? new Intl.NumberFormat('de-DE', { style: 'currency', currency: tx.currency, minimumFractionDigits: 2 }).format(tx.amount)
+                    : '';
+                
+                // MWST Dropdown generieren
+                const vatOptions = GERMAN_VAT_RATES.map(rate => 
+                    `<option value="${rate.rate}" ${tx.vatRate === rate.rate ? 'selected' : ''}>${t[rate.key]}</option>`
+                ).join('');
+                
+                // Konten-Code Dropdown generieren
+                const accountCodeOptions = GERMAN_ACCOUNT_CODES.map(item => 
+                    `<option value="${item.code}" ${tx.accountCode === item.code ? 'selected' : ''}>${t[item.key]}</option>`
+                ).join('');
+
+
+                row.innerHTML = `
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 table-cell-date">${tx.date}</td>
+                    <td class="px-6 py-3 text-sm text-gray-900">${tx.reference}</td>
+                    <!-- NEUE SPALTE: Original Währung -->
+                    <td class="px-6 py-3 whitespace-nowrap text-right text-sm text-gray-500 table-cell-orig">
+                        ${isForeignCurrency ? formattedOriginalAmount : '-'}
+                    </td>
+                    <td class="px-6 py-3 whitespace-nowrap text-right text-sm font-semibold ${amountClass} table-cell-amount">
+                        ${formattedAmount}
+                    </td>
+                    
+                    <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-900 table-cell-account">
+                        <div class="flex items-center space-x-2">
+                            <select id="accSelect_${index}" class="account-select ${selectClass}"
+                                    data-index="${index}" data-field="accountCode" onchange="updateBooking(event)" ${disabledAttr}>
+                                ${accountCodeOptions}
+                            </select>
+                            <!-- NEU: KI-Vorschlag Button -->
+                            ${!tx.isAutoBooked ? `
+                                <button onclick="window.applySuggestion(this, ${index})" 
+                                        class="p-2 rounded-full text-white bg-indigo-600 hover:bg-indigo-700 transition duration-150 flex-shrink-0 text-xs font-semibold"
+                                        title="${t.btn_ki_suggestion_tooltip}">
+                                    ${t.btn_ki_suggestion}
+                                </button>
+                            ` : ''}
+                            <!-- Sperr/Entsperr Button -->
+                            ${tx.isAutoBooked ? `<button onclick="toggleLock(${index})" class="p-1 rounded-full text-white text-xs leading-none transition duration-150 flex-shrink-0 ${isDisabled ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}" title="${isDisabled ? t.man_p2_3_lock : t.booking_rule_applied}">
+                                <!-- Schloss Icon (gesperrt) oder Offenes Schloss (entsperrt) -->
+                                ${isDisabled ? 
+                                    '<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a3 3 0 003-3v-5a3 3 0 00-3-3H6a3 3 0 00-3 3v5a3 3 0 003 3zM18 10V6a2 2 0 00-2-2h-3.586a1 1 0 00-.707.293l-2.414 2.414A1 1 0 006 7.414V10m6 0a2 2 0 100-4 2 2 0 000 4z"/></svg>' : 
+                                    '<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 118 0v4m-2 4h-4m4 0v4m-4-4h-4m12 0H8m4 4h4m-4-4v4m-4-4v4m4-8V7a4 4 0 10-8 0v4m-2 8h12a2 2 0 002-2v-5a2 2 0 00-2-2H8a2 2 0 00-2 2v5a2 2 0 002 2z"/></svg>'}
+                            </button>` : ''}
+                        </div>
+                        ${tx.isAutoBooked && isDisabled ? `<span class="text-xs text-red-600 font-medium block mt-1">${t.booking_locked}</span>` : ''}
+                    </td>
+                    <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-900 table-cell-vat">
+                        <select id="vatSelect_${index}" class="vat-rate ${selectClass}" data-index="${index}" data-field="vatRate" onchange="updateBooking(event)" ${disabledAttr}>
+                            ${vatOptions}
+                        </select>
+                    </td>
+                    <td class="px-6 py-3 whitespace-nowrap text-right text-sm font-medium text-gray-700 table-cell-amount">
+                        ${formattedNetAmount}
+                    </td>
+                    <td class="px-6 py-3 whitespace-nowrap text-right text-sm font-medium ${tx.vatAmount > 0 ? 'text-blue-600' : 'text-gray-700'} table-cell-amount">
+                        ${formattedVatAmount}
+                    </td>
+
+                    <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-900 table-cell-receipt">
+                        <div class="flex items-center space-x-2">
+                            <input type="url" id="receiptInput_${index}" value="${tx.receiptLink}" placeholder="${t.man_p1_6.split('(')[1].replace(')', '')}" 
+                                   class="receipt-input p-1 border border-gray-300 rounded-md w-full text-xs focus:ring-indigo-500 focus:border-indigo-500"
+                                   data-index="${index}" onchange="updateReceiptLink(event)" ${isDisabled && tx.receiptLink ? 'disabled' : ''}>
+                            <!-- Kamera-Button ist immer aktiv, aber Link-Feld gesperrt -->
+                            <button onclick="triggerReceiptCapture(${index})" title="${t.man_p1_6.split('nutze')[1] || 'Kamera'}" 
+                                    class="p-2 text-white bg-green-500 rounded-full hover:bg-green-600 flex-shrink-0 transition duration-150">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14.5 4h.5c2.76 0 5 2.24 5 5v7.5c0 2.76-2.24 5-5 5H9c-2.76 0-5-2.24-5-5V9c0-2.76 2.24-5 5-5h.5"/>
+                                    <circle cx="12" cy="13" r="3"/>
+                                    <path d="M16 3l-1.5 2.5"/>
+                                    <path d="M9.5 3l1.5 2.5"/>
+                                    <path d="M7 10h11"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <p id="receiptStatus_${index}" class="text-xs mt-1 italic ${tx.receiptLink.startsWith(t.msg_temp_receipt.split(':')[0]) ? 'text-green-600 font-semibold' : 'text-gray-500'}">
+                            ${tx.receiptStatus || ''}
+                        </p>
+                    </td>
+                    <td class="px-3 py-3 whitespace-nowrap text-right text-sm font-medium text-gray-700 table-cell-amount">
+                        ${formattedRunningBalance}
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            // Update summary cards
+            document.getElementById('totalIncome').textContent = new Intl.NumberFormat('de-DE', { style: 'currency', currency: BASE_CURRENCY, minimumFractionDigits: 2 }).format(totalIncome);
+            document.getElementById('totalExpense').textContent = new Intl.NumberFormat('de-DE', { style: 'currency', currency: BASE_CURRENCY, minimumFractionDigits: 2 }).format(totalExpense);
+            document.getElementById('netBalance').textContent = new Intl.NumberFormat('de-DE', { style: 'currency', currency: BASE_CURRENCY, minimumFractionDigits: 2 }).format(totalIncome + totalExpense);
+            document.getElementById('totalVAT').textContent = new Intl.NumberFormat('de-DE', { style: 'currency', currency: BASE_CURRENCY, minimumFractionDigits: 2 }).format(totalVAT);
+
+            // NEU: Update Completeness Check
+            checkCompleteness(transactions);
+
+
+            const netBalanceElement = document.getElementById('netBalance');
+            netBalanceElement.classList.remove('income', 'expense', 'text-gray-800');
+            if (totalIncome + totalExpense > 0) {
+                 netBalanceElement.classList.add('income');
+            } else if (totalIncome + totalExpense < 0) {
+                 netBalanceElement.classList.add('expense');
+            } else {
+                 netBalanceElement.classList.add('text-gray-800');
+            }
+        }
+
+        /**
+         * Updates the booking data (Account Code/VAT Rate) and saves the rule.
+         */
+        function updateBooking(event) {
+            const input = event.target;
+            const index = parseInt(input.getAttribute('data-index'));
+            const field = input.getAttribute('data-field');
+            
+            if (index >= 0 && index < window.currentTransactions.length) {
+                const tx = window.currentTransactions[index];
+                
+                // Stelle sicher, dass das Feld nicht gesperrt ist, BEVOR es geändert wird
+                if (tx.isAutoBooked && !tx.isManualOverride) {
+                    console.error("Änderung blockiert: Zeile ist gesperrt.");
+                    return; 
+                }
+
+
+                let newValue;
+                if (field === 'vatRate') {
+                    newValue = parseFloat(input.value);
+                    tx[field] = newValue;
+                } else {
+                    // Für Konten-Code (String) oder andere Felder
+                    newValue = input.value.trim();
+                    tx[field] = newValue;
+                }
+
+                // 1. VAT / Netto neu berechnen und UI neu rendern
+                const { netAmount, vatAmount } = calculateVAT(tx.amount, tx.vatRate);
+                tx.netAmount = netAmount;
+                tx.vatAmount = vatAmount;
+                
+                // Wir haben die Buchung manuell überschrieben oder neu gebucht.
+                tx.isAutoBooked = true; // Setze den Status auf gebucht
+                tx.isManualOverride = false; // Nach der Speicherung wieder sperren (Audit-Lock)
+
+
+                // Da sich die MWST-Beträge und Salden geändert haben könnten, rendern wir neu
+                calculateAndRender(window.currentTransactions);
+
+                // 2. Persistent Storage Update (Rule Saving)
+                if (tx.accountCode) {
+                    // Verwende Priorität 50 als Standard für neue Regeln
+                    const currentPriority = window.categoryMappings[tx.reference.trim()]?.priority || 50; 
+                    
+                    const bookingData = {
+                        accountCode: tx.accountCode,
+                        vatRate: tx.vatRate,
+                        priority: currentPriority,
+                    };
+                    // Speichere die exakte Referenz. Der Nutzer kann dies im Modal zur Wildcard machen.
+                    window.saveCategoryMapping(tx.reference.trim(), bookingData);
+                }
+            }
+        }
+
+        /**
+         * Updates the receipt link of a transaction object in the array.
+         */
+        window.updateReceiptLink = function(event) {
+            const input = event.target;
+            const index = parseInt(input.getAttribute('data-index'));
+            const t = window.DE_TEXTS;
+            
+            // Link ist unabhängig vom Buchungs-Lock
+            if (index >= 0 && index < window.currentTransactions.length) {
+                window.currentTransactions[index].receiptLink = input.value.trim();
+                window.currentTransactions[index].receiptStatus = ''; 
+                
+                const statusElement = document.getElementById(`receiptStatus_${index}`);
+                if (statusElement) {
+                    statusElement.textContent = '';
+                    statusElement.classList.remove('text-green-600', 'font-semibold');
+                    statusElement.classList.add('text-gray-500');
+                }
+            }
+            
+            // NEU: Vollständigkeitsprüfung nach Link-Update
+            if (window.currentTransactions) {
+                checkCompleteness(window.currentTransactions);
+            }
+        }
+
+        /**
+         * Generiert und zeigt den MWST-Abrechnungsbericht an.
+         */
+        window.generateMWSTReport = function() {
+            const t = window.DE_TEXTS;
+            if (!window.currentTransactions || window.currentTransactions.length === 0) {
+                document.getElementById('reportResults').innerHTML = `<p class="text-red-500">${t.report_placeholder.replace('Wähle einen Zeitraum und klicke auf "USt-Bericht generieren", um die Ergebnisse anzuzeigen.', 'Bitte zuerst eine CSV-Datei hochladen und buchen.')}</p>`;
+                return;
+            }
+
+            const startDateInput = document.getElementById('startDate').value;
+            const endDateInput = document.getElementById('endDate').value;
+            const reportResultsElement = document.getElementById('reportResults');
+            reportResultsElement.innerHTML = `<p class="text-gray-600">${t.status_loading}</p>`; // Reuse status loading key
+
+            // Date objects for filtering (End Time is inclusive, so we add one day)
+            const startTime = startDateInput ? new Date(startDateInput) : new Date('1970-01-01');
+            let endTime = endDateInput ? new Date(endDateInput) : new Date('2100-01-01');
+            endTime.setDate(endTime.getDate() + 1); // Make end date inclusive
+
+            // Datum validieren
+            if (startTime > endTime) {
+                reportResultsElement.innerHTML = `<p class="text-red-500">${t.report_placeholder.replace(/Wähle einen Zeitraum und klicke auf "USt-Bericht generieren", um die Ergebnisse anzuzeigen\./, 'Startdatum muss vor dem Enddatum liegen.')}</p>`;
+                return;
+            }
+            
+            // 1. Filtern und Aggregieren
+            const aggregatedData = {};
+            let grandTotalNet = 0;
+            let grandTotalVAT = 0;
+
+            window.currentTransactions.forEach(tx => {
+                const txDate = new Date(tx.date);
+                
+                // Filter nach Datum
+                if (txDate >= startTime && txDate < endTime) { // endTime is exclusive now
+                    
+                    // Stelle sicher, dass die Buchungsinformationen vorhanden sind
+                    if (!tx.accountCode) return; 
+
+                    const key = `${tx.accountCode}|${tx.vatRate}`;
+                    
+                    if (!aggregatedData[key]) {
+                        aggregatedData[key] = {
+                            accountCode: tx.accountCode,
+                            vatRate: tx.vatRate,
+                            totalNet: 0,
+                            totalVAT: 0
+                        };
+                    }
+                    
+                    aggregatedData[key].totalNet += tx.netAmount;
+                    aggregatedData[key].totalVAT += tx.vatAmount;
+                    
+                    grandTotalNet += tx.netAmount;
+                    grandTotalVAT += tx.vatAmount;
+                }
+            });
+
+            // 2. Erzeuge die Berichtstabelle (Format wie für MWST-Abrechnung)
+            let reportHTML = `
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">${t.card_report_title.replace('4. ', '')} (${startDateInput || t.report_start_date.split('(')[0].trim()} bis ${endDateInput || t.report_end_date.split('(')[0].trim()})</h3>
+                <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 border border-gray-200">
+                    <thead class="bg-indigo-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">${t.th_account_code}</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">${t.th_vat_rate}</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">${t.th_net.replace(' (EUR)', '')} (EUR)</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">${t.th_vat.replace(' (EUR)', '')} (EUR)</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">${t.th_amount_brutto.replace(' (Brutto)', '')} (EUR)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-100">
+            `;
+
+            const sortedKeys = Object.keys(aggregatedData).sort();
+
+            if (sortedKeys.length === 0) {
+                reportHTML += `<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">${t.report_placeholder.replace(/Wähle einen Zeitraum und klicke auf "USt-Bericht generieren", um die Ergebnisse anzuzeigen\./, 'Keine gebuchten Transaktionen im gewählten Zeitraum gefunden.')}</td></tr>`;
+            } else {
+                sortedKeys.forEach(key => {
+                    const data = aggregatedData[key];
+                    const totalBrutto = data.totalNet + data.totalVAT;
+                    
+                    // Formatierung
+                    const formatEUR = (amount) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: BASE_CURRENCY, minimumFractionDigits: 2 }).format(amount);
+
+                    reportHTML += `
+                        <tr>
+                            <td class="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${data.accountCode}</td>
+                            <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-700">${data.vatRate.toFixed(1)}%</td>
+                            <td class="px-6 py-3 whitespace-nowrap text-right text-sm text-gray-700">${formatEUR(data.totalNet)}</td>
+                            <td class="px-6 py-3 whitespace-nowrap text-right text-sm text-blue-600 font-semibold">${formatEUR(data.totalVAT)}</td>
+                            <td class="px-6 py-3 whitespace-nowrap text-right text-sm font-bold text-gray-800">${formatEUR(totalBrutto)}</td>
+                        </tr>
+                    `;
+                });
+                
+                // Fußzeile mit Gesamtsummen
+                reportHTML += `
+                    <tr class="bg-gray-100 font-bold border-t-2 border-indigo-200">
+                        <td class="px-6 py-3 text-left text-sm text-gray-800" colspan="2">${t.summary_income.replace('gesamt', '').trim()} / ${t.summary_expense.replace('gesamt', '').trim()} (USt-Basis)</td>
+                        <td class="px-6 py-3 text-right text-sm text-gray-800">${formatEUR(grandTotalNet)}</td>
+                        <td class="px-6 py-3 text-right text-sm text-blue-800">${formatEUR(grandTotalVAT)}</td>
+                        <td class="px-6 py-3 text-right text-sm text-gray-800">${formatEUR(grandTotalNet + grandTotalVAT)}</td>
+                    </tr>
+                `;
+            }
+
+            reportHTML += `
+                    </tbody>
+                </table>
+                </div>
+                <p class="text-xs text-gray-500 mt-4 italic">Hinweis: Positive USt-Beträge sind Vorsteuerabzüge, negative sind geschuldete USt.</p>
+            `;
+
+            reportResultsElement.innerHTML = reportHTML;
+        }
+
+        /**
+         * Converts the current category Mappings object into a JSON string and downloads it.
+         */
+        window.exportMappingsToJSON = function() {
+            const t = window.DE_TEXTS;
+            if (Object.keys(window.categoryMappings).length === 0) {
+                document.getElementById('exportMessage').textContent = t.export_info.replace('Exportiert alle Transaktionen inkl. Konten-Code und USt.', 'Keine Regeln zum Exportieren vorhanden.');
+                return;
+            }
+
+            const jsonContent = JSON.stringify(window.categoryMappings, null, 2);
+            
+            // Create a Blob and download the file
+            const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+            const link = document.createElement('a');
+            
+            const fileName = `Wise_Buchungsregeln_Export_${new Date().toISOString().slice(0, 10)}.json`;
+
+            if (navigator.msSaveBlob) { // IE 10+
+                navigator.msSaveBlob(blob, fileName);
+            } else {
+                link.href = URL.createObjectURL(blob);
+                link.setAttribute('download', fileName);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+            document.getElementById('exportMessage').textContent = `${t.btn_export_rules.replace(' (JSON) exportieren', '')} erfolgreich: ${fileName}`;
+        }
+
+        /**
+         * Converts the currentTransactions array (including all booking data) into a CSV string and downloads it.
+         */
+        window.exportToCSV = function() {
+            const t = window.DE_TEXTS;
+            if (window.currentTransactions.length === 0) {
+                document.getElementById('exportMessage').textContent = t.export_info.replace('Exportiert alle Transaktionen inkl. Konten-Code und USt.', 'Keine Daten zum Exportieren vorhanden.');
+                return;
+            }
+
+            // NEUE HEADER FÜR STEUERKONSISTENZ
+            const headers = [
+                t.th_date, 
+                t.th_ref.split('(')[0].trim(), 
+                t.th_amount_brutto.split('(')[0].trim() + '_Brutto', 
+                'Waehrung_Brutto', // Wise Währung
+                'Original_Betrag', 
+                'Original_Waehrung', 
+                t.th_account_code, 
+                t.th_vat_rate.replace('-', '_') + '_Prozent', 
+                t.th_net + '_EUR', 
+                t.th_vat + '_EUR', 
+                t.th_receipt.split('(')[0].trim() + '_Link'
+            ];
+            let csvContent = headers.map(escapeCSV).join(',') + '\n';
+
+            window.currentTransactions.forEach(tx => {
+                const linkValue = tx.receiptLink.startsWith(t.msg_temp_receipt.split(':')[0]) ? 'ACHTUNG: Temporär/Kein Link' : tx.receiptLink;
+                
+                const row = [
+                    tx.date,
+                    tx.reference,
+                    tx.amount,
+                    tx.currency,
+                    tx.currency !== BASE_CURRENCY ? tx.amount : '', // Original Betrag nur wenn Fremdwährung
+                    tx.currency !== BASE_CURRENCY ? tx.currency : '', // Original Währung nur wenn Fremdwährung
+                    tx.accountCode, 
+                    tx.vatRate, 
+                    tx.netAmount, 
+                    tx.vatAmount, 
+                    linkValue 
+                ];
+                csvContent += row.map(escapeCSV).join(',') + '\n';
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            
+            const fileName = `Wise_Buchhaltung_Export_USt_${new Date().toISOString().slice(0, 10)}.csv`;
+
+            if (navigator.msSaveBlob) { // IE 10+
+                navigator.msSaveBlob(blob, fileName);
+            } else {
+                link.href = URL.createObjectURL(blob);
+                link.setAttribute('download', fileName);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+            document.getElementById('exportMessage').textContent = `${t.btn_export_data.replace(' (CSV) exportieren', '')} erfolgreich: ${fileName}`;
+        }
+
+        // --- MODAL & REGELVERWALTUNGS LOGIC ---
+        
+        window.openRulesModal = function() {
+            document.getElementById('rulesModal').style.display = 'flex';
+            renderRulesModal(); // Lädt die aktuellen Regeln
+        }
+
+        window.closeRulesModal = function() {
+            document.getElementById('rulesModal').style.display = 'none';
+        }
+        
+        window.openCompletenessModal = function() {
+            const t = window.DE_TEXTS;
+            if (!window.currentTransactions || window.currentTransactions.length === 0) {
+                 // Zeigt den Fehler in der Haupt-Upload-Meldung an, wenn keine Daten geladen sind
+                 document.getElementById('uploadMessage').textContent = t.table_empty.replace('Bitte lade eine Wise CSV-Datei hoch, um die Transaktionen anzuzeigen.', 'Bitte zuerst eine CSV-Datei hochladen.');
+                 document.getElementById('uploadMessage').classList.remove('hidden');
+                 return;
+            }
+            document.getElementById('completenessModal').style.display = 'flex';
+            renderCompletenessModal(); 
+        }
+        
+        window.closeCompletenessModal = function() {
+            document.getElementById('completenessModal').style.display = 'none';
+        }
+        
+        window.jumpToTransaction = function(tableIndex) {
+            closeCompletenessModal(); // Modal schließen
+            
+            const rowElement = document.getElementById(`tx-row-${tableIndex}`);
+            if (rowElement) {
+                // Scrollen zur Zeile
+                rowElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Optional: Kurze visuelle Hervorhebung
+                rowElement.style.transition = 'background-color 0.5s ease';
+                rowElement.style.backgroundColor = '#fff3cd'; // Gelbliche Hervorhebung
+                setTimeout(() => {
+                    rowElement.style.backgroundColor = rowElement.classList.contains('auto-booked') ? '#f0fdf4' : 'white';
+                }, 2000);
+            }
+        }
+
+
+        /**
+         * Erzeugt die Tabelle im Regel-Verwaltungs-Modal
+         */
+        function renderRulesModal() {
+            const rulesTableBody = document.getElementById('rulesTableBody');
+            rulesTableBody.innerHTML = '';
+            const t = window.DE_TEXTS;
+            const mappings = window.categoryMappings;
+            
+            // NEU: Sortiere die Keys nach der Priorität, um die Übersichtlichkeit zu erhöhen
+            const keys = Object.keys(mappings).sort((a, b) => {
+                const priorityA = mappings[a].priority !== undefined ? mappings[a].priority : 50;
+                const priorityB = mappings[b].priority !== undefined ? mappings[b].priority : 50;
+                
+                if (priorityA !== priorityB) {
+                    return priorityA - priorityB; // Niedrigste Zahl zuerst
+                }
+                return a.localeCompare(b); // Bei gleicher Priorität alphabetisch
+            });
+
+
+            const ruleCountStatus = document.getElementById('ruleCountStatus');
+            if (keys.length === 0) {
+                 ruleCountStatus.textContent = t.rules_empty;
+                 rulesTableBody.innerHTML = `<tr><td colspan="5" class="px-4 py-3 text-center text-gray-500">${t.rules_empty}</td></tr>`;
+                 return;
+            }
+            ruleCountStatus.textContent = t.rules_count.replace('{count}', keys.length);
+
+            keys.forEach(key => {
+                const rule = mappings[key];
+                const ruleId = key.replace(/[^a-zA-Z0-9]/g, '_'); // Einfacher, sicherer ID
+                const currentPriority = rule.priority !== undefined ? rule.priority : 50;
+
+                // MWST Dropdown für Modal
+                const vatOptions = GERMAN_VAT_RATES.map(rate => 
+                    `<option value="${rate.rate}" ${rule.vatRate === rate.rate ? 'selected' : ''}>${t[rate.key]}</option>`
+                ).join('');
+                
+                // Konten-Code Dropdown für Modal
+                const accountCodeOptions = GERMAN_ACCOUNT_CODES.map(item => 
+                    `<option value="${item.code}" ${rule.accountCode === item.code ? 'selected' : ''}>${t[item.key]}</option>`
+                ).join('');
+
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50';
+                
+                // NEU: Input-Feld für den editierbaren Schlüssel (Wildcard)
+                const editableKey = `<input type="text" id="modal_key_${ruleId}" value="${key}" 
+                                       class="p-1 border border-gray-300 rounded-md w-full text-xs font-mono" 
+                                       data-original-key="${key}" onchange="updateRuleKeyAndValueInModal('${key}')">`;
+                
+                // NEU: Input-Feld für Priorität
+                const priorityInput = `<input type="number" id="modal_priority_${ruleId}" value="${currentPriority}" 
+                                       class="p-1 border border-gray-300 rounded-md w-full text-xs text-center" 
+                                       min="1" max="100" onchange="updateRuleValueInModal('${key}')" title="Niedriger Wert (z.B. 1) = Höhere Priorität.">`;
+
+
+                row.innerHTML = `
+                    <td class="px-4 py-2 text-sm text-gray-900 break-words font-medium">${editableKey}</td>
+                    <td class="px-4 py-2">${priorityInput}</td>
+                    <td class="px-4 py-2">
+                        <select id="modal_acc_${ruleId}" class="account-select text-xs p-1 border" data-rule-key="${key}" onchange="updateRuleValueInModal('${key}')">
+                            ${accountCodeOptions}
+                        </select>
+                    </td>
+                    <td class="px-4 py-2">
+                        <select id="modal_vat_${ruleId}" class="vat-rate text-xs p-1 border" data-rule-key="${key}" onchange="updateRuleValueInModal('${key}')">
+                            ${vatOptions}
+                        </select>
+                    </td>
+                    <td class="px-4 py-2">
+                        <button onclick="window.deleteRuleConfirmation('${key}')" class="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-100 transition duration-150" title="${t.btn_delete}">
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 10-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                        </button>
+                    </td>
+                `;
+                rulesTableBody.appendChild(row);
+            });
+        }
+        
+        /**
+         * Erzeugt die Tabelle im Vollständigkeits-Check-Modal
+         */
+        function renderCompletenessModal() {
+            const completenessTableBody = document.getElementById('completenessTableBody');
+            const completenessStatus = document.getElementById('completenessStatus');
+            completenessTableBody.innerHTML = '';
+            const t = window.DE_TEXTS;
+            const openCount = window.openBookings.length;
+
+            if (openCount === 0) {
+                 completenessStatus.textContent = t.check_status_ok.replace('{count}', window.currentTransactions.length);
+                 completenessTableBody.innerHTML = `<tr><td colspan="4" class="px-4 py-3 text-center text-gray-500">${t.check_status_ok.replace('✅ ', '')}</td></tr>`;
+                 return;
+            }
+            
+            completenessStatus.textContent = t.check_status_open.replace('{count}', openCount);
+
+
+            window.openBookings.forEach(item => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-red-50';
+                
+                const formattedDate = new Date(item.date).toLocaleDateString('de-DE');
+                
+                row.innerHTML = `
+                    <td class="px-4 py-2 text-sm text-gray-900">${formattedDate}</td>
+                    <td class="px-4 py-2 text-sm text-gray-900 break-words">${item.reference}</td>
+                    <td class="px-4 py-2 text-sm text-red-600 font-semibold">${item.missingFields}</td>
+                    <td class="px-4 py-2">
+                        <span onclick="window.jumpToTransaction(${item.indexInTable})" class="jump-link text-sm font-medium">
+                            ${t.check_action_jump}
+                        </span>
+                    </td>
+                `;
+                completenessTableBody.appendChild(row);
+            });
+        }
+
+
+        /**
+         * UPDATED: Speichert die Wertänderung (Code/MWST/Priorität) einer Regel direkt im Modal.
+         * @param {string} key - Der aktuelle (originale oder wildcard) Schlüssel der Regel.
+         */
+        window.updateRuleValueInModal = function(key) {
+            const ruleId = key.replace(/[^a-zA-Z0-9]/g, '_');
+            const newAccountCode = document.getElementById(`modal_acc_${ruleId}`).value;
+            const newVatRate = parseFloat(document.getElementById(`modal_vat_${ruleId}`).value);
+            const newPriority = document.getElementById(`modal_priority_${ruleId}`).value; // NEU: Priorität holen
+            
+            const bookingData = {
+                accountCode: newAccountCode,
+                vatRate: newVatRate,
+                priority: parseInt(newPriority), // NEU: Priorität übergeben
+            };
+            
+            // Speichern in DB (onSnapshot wird das Modal und die Transaktionstabelle aktualisieren)
+            window.saveCategoryMapping(key, bookingData); 
+        }
+
+        /**
+         * NEU: Speichert die Änderung des REGEL-SCHLÜSSELS (für Wildcards) und verschiebt die Regel.
+         * @param {string} originalKey - Der ursprüngliche Schlüssel der Regel.
+         */
+        window.updateRuleKeyAndValueInModal = async function(originalKey) {
+            const ruleId = originalKey.replace(/[^a-zA-Z0-9]/g, '_');
+            const keyInput = document.getElementById(`modal_key_${ruleId}`);
+            const newKey = keyInput.value.trim();
+            const t = window.DE_TEXTS;
+            
+            if (newKey === originalKey) {
+                // Nur der Key wurde bearbeitet, aber nicht geändert -> nichts tun.
+                return;
+            }
+            
+            if (!newKey) {
+                // Keine alert() verwenden, da nicht erlaubt
+                console.error("Der Schlüssel darf nicht leer sein.");
+                keyInput.value = originalKey; // Wert zurücksetzen
+                return;
+            }
+            
+            if (window.categoryMappings[newKey]) {
+                console.error(t.btn_manage_rules + `: Schlüssel "${newKey}" existiert bereits. Bitte umbenennen oder Regel manuell mergen.`);
+                keyInput.value = originalKey; 
+                return;
+            }
+            
+            // 1. Hole Buchungsdaten des alten Schlüssels (inkl. Priority)
+            const bookingData = window.categoryMappings[originalKey];
+            
+            // 2. Lösche alte Regel
+            await window.deleteMapping(originalKey);
+            
+            // 3. Speichere neue Regel unter dem neuen Schlüssel (Wildcard oder exakt)
+            await window.saveCategoryMapping(newKey, bookingData);
+
+            // Setze den originalen Key-Wert im Input-Feld des Modals zurück (wird durch onSnapshot/renderRulesModal übernommen)
+            keyInput.setAttribute('data-original-key', newKey);
+        }
+
+        window.deleteRuleConfirmation = function(key) {
+             const t = window.DE_TEXTS;
+             // Da alert/confirm nicht erlaubt ist, geben wir nur einen Log aus
+             if (window.confirm(t.btn_delete + ' ' + key + '?')) {
+                 window.deleteMapping(key);
+             }
+        }
+
+        // Initial setup
+        window.onload = function() {
+             console.log("Warte auf Firebase-Authentifizierung und Wise CSV-Upload.");
+        }
+    </script>
+
+</body>
+</html>
