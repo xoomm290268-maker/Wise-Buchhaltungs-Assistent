@@ -1548,13 +1548,9 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
             const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
             
             // WICHTIG: Die korrigierten Header, die deine Wise CSV akzeptiert
-            const requiredHeaders = ['Abgeschlossen am', 'Amount', 'Currency', 'Reference'];
+            const requiredHeaders = ['Abgeschlossen am', 'Ausgangsbetrag (nach Gebühren)', 'Ausgangswährung', 'Referenz'];
             
-            // Finde den tatsächlichen Header, der in deiner Datei für das Datum verwendet wird
-            let dateHeader = requiredHeaders[0];
-            let referenceHeader = requiredHeaders[3];
-
-            // Flexible Header-Prüfung
+            // Flexible Header-Prüfung und Mapping
             let foundRequiredHeaders = [];
             let headerMapping = {};
             
@@ -1563,19 +1559,17 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
                 const cleanHeader = header.replace(/"/g, '').trim();
                 
                 if (cleanHeader === 'Abgeschlossen am' || cleanHeader === 'Completed Date') {
-                    dateHeader = header;
                     headerMapping['Date'] = index;
                     foundRequiredHeaders.push('Date');
-                } else if (cleanHeader === 'Referenz') {
-                    referenceHeader = header;
-                    headerMapping['Reference'] = index;
-                    foundRequiredHeaders.push('Reference');
-                } else if (cleanHeader === 'Ausgangsbetrag (nach Gebühren)') {
+                } else if (cleanHeader === 'Ausgangsbetrag (nach Gebühren)' || cleanHeader === 'Amount') {
                     headerMapping['Amount'] = index;
                     foundRequiredHeaders.push('Amount');
-                } else if (cleanHeader === 'Ausgangswährung') {
+                } else if (cleanHeader === 'Ausgangswährung' || cleanHeader === 'Currency') {
                     headerMapping['Currency'] = index;
                     foundRequiredHeaders.push('Currency');
+                } else if (cleanHeader === 'Referenz' || cleanHeader === 'Reference') {
+                    headerMapping['Reference'] = index;
+                    foundRequiredHeaders.push('Reference');
                 }
             });
 
@@ -1583,7 +1577,7 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
             const expectedKeys = ['Date', 'Amount', 'Currency'];
             const missingKeys = expectedKeys.filter(key => !foundRequiredHeaders.includes(key));
             if (missingKeys.length > 0) {
-                 throw new Error(t.msg_file_error + `Fehlende obligatorische Header: '${missingKeys.join(', ')}'. Dein Wise-Export ist nicht kompatibel.`);
+                 throw new Error(t.msg_file_error + `Fehlender obligatorischer Header: '${missingKeys.join(', ')}'. Dein Wise-Export ist nicht kompatibel.`);
             }
 
 
@@ -1593,25 +1587,18 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
 
                 if (values.length !== headers.length) continue; 
 
-                const row = {};
-                headers.forEach((header, index) => {
-                    row[header.replace(/"/g, '').trim()] = values[index].replace(/"/g, '').trim();
-                });
-                
-                // Nutze die gefundenen Header, um die Daten zu extrahieren
-                const dateVal = values[headerMapping['Date']]?.replace(/"/g, '').trim() || row['Abgeschlossen am'] || row['Completed Date'];
                 const amountVal = values[headerMapping['Amount']]?.replace(/"/g, '').trim();
-                const currencyVal = values[headerMapping['Currency']]?.replace(/"/g, '').trim();
-                const referenceVal = values[headerMapping['Reference']]?.replace(/"/g, '').trim() || row['Referenz'] || 'N/A';
-
+                
+                // Wir überspringen leere Zeilen oder Zeilen ohne gültigen Betrag
+                if (!amountVal) continue;
 
                 const amount = parseFloat(amountVal);
                 if (!isNaN(amount) && amount !== 0) {
                     transactions.push({
-                        date: dateVal,
-                        reference: referenceVal, 
+                        date: values[headerMapping['Date']]?.replace(/"/g, '').trim(),
+                        reference: values[headerMapping['Reference']]?.replace(/"/g, '').trim() || 'N/A', 
                         amount: amount,
-                        currency: currencyVal,
+                        currency: values[headerMapping['Currency']]?.replace(/"/g, '').trim(),
                         // NEUE FELDER FÜR BUCHHALTUNG
                         accountCode: '', 
                         vatRate: 0.0, // Standard-MWST-Satz auf 0 setzen
