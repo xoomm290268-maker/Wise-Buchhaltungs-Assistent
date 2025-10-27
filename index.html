@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" class="light"> <!-- Standardmäßig light, wird von JS überschrieben -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,73 +7,117 @@
     <!-- Lade Tailwind CSS für responsives Styling -->
     <script src="https://cdn.tailwindcss.com/"></script>
     <style>
-        /* Spezifische Schriftart und Hintergrund */
+        /* --- DARK MODE BASICS & COLOR VARIABLES --- */
+        
+        /* 1. Light Mode (Default) */
+        :root {
+            /* Hintergrund & Karten */
+            --bg-page: #f7f9fb;
+            --bg-card: white;
+            --border-color: #e2e8f0;
+            /* Text & Icons */
+            --text-primary: #1f2937; /* Gray-800 */
+            --text-secondary: #6b7280; /* Gray-600 */
+            /* Akzentfarben */
+            --color-income: #10b981; /* Emerald */
+            --color-expense: #ef4444; /* Red */
+            --color-vat: #d97706; /* Amber-600 */
+            /* Spezielle Hintergründe */
+            --bg-booked: #f0fdf4; /* Pale Green */
+            --border-booked: #dcfce7;
+            --bg-modal: white;
+            /* NEU: Theme Icon Farbe im Light Mode */
+            --color-toggle-icon: #f59e0b; /* Amber/Yellow-500 für die Sonne */
+        }
+
+        /* 2. Dark Mode Overrides */
+        html[theme='dark'] {
+            /* Hintergrund & Karten */
+            --bg-page: #111827; /* Gray-900 */
+            --bg-card: #1f2937; /* Gray-800 */
+            --border-color: #374151; /* Gray-700 */
+            /* Text & Icons */
+            --text-primary: #f3f4f6; /* Gray-100 */
+            --text-secondary: #9ca3af; /* Gray-400 */
+            /* Akzentfarben (können gleich bleiben oder angepasst werden) */
+            --color-income: #34d399; /* Light Green */
+            --color-expense: #f87171; /* Light Red */
+            --color-vat: #f59e0b; /* Amber-500 */
+            /* Spezielle Hintergründe */
+            --bg-booked: #153229; /* Darker Green */
+            --border-booked: #1f5043;
+            --bg-modal: #1f2937;
+            /* NEU: Theme Icon Farbe im Dark Mode */
+            --color-toggle-icon: #9ca3af; /* Grau für den Mond */
+        }
+        
+        /* Wende Variablen auf Basis-Elemente an */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f7f9fb;
+            background-color: var(--bg-page);
+            color: var(--text-primary);
         }
-        /* Farben passend zu einem Finance-Tool */
         .card {
-            background-color: white;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
+            background-color: var(--bg-card);
+            border-color: var(--border-color);
         }
-        .income { color: #10b981; } /* Emerald-Grün für Einnahmen */
-        .expense { color: #ef4444; } /* Rot für Ausgaben */
-        .auto-booked { background-color: #f0fdf4; border-color: #dcfce7; } /* Grünlicher Hintergrund für automatisch gebuchte Zeilen */
-
+        /* Tabellen-Hintergrund, Kontrast zu Karten */
+        .card > .overflow-x-auto {
+             background-color: var(--bg-card); 
+        }
+        .card > .overflow-x-auto table thead {
+             background-color: var(--bg-card); /* Oder eine leichtere/dunklere Schattierung */
+        }
+        .card > .overflow-x-auto table th {
+            color: var(--text-secondary);
+        }
+        .text-gray-900 { color: var(--text-primary); }
+        .text-gray-700 { color: var(--text-primary); } /* Muss auch angepasst werden */
+        .text-gray-600 { color: var(--text-secondary); }
+        
+        /* Akzente */
+        .income { color: var(--color-income); } 
+        .expense { color: var(--color-expense); } 
+        .vat-highlight { color: var(--color-vat); }
+        .auto-booked { 
+            background-color: var(--bg-booked); 
+            border-color: var(--border-booked); 
+        }
+        
+        /* Formularelemente und Modals */
+        .vat-rate, .account-select, .receipt-input, input[type="date"], input[type="text"], input[type="url"] {
+            background-color: var(--bg-card);
+            border-color: var(--border-color);
+            color: var(--text-primary);
+        }
+        .select-disabled {
+            background-color: var(--border-color);
+            color: var(--text-secondary);
+        }
+        .modal-content {
+            background-color: var(--bg-modal);
+        }
+        .modal-content .border-b {
+            border-color: var(--border-color);
+        }
+        
         /* Spezielle Spaltenbreiten für bessere Lesbarkeit auf dem Desktop */
         @media (min-width: 768px) {
             .table-cell-date { width: 8%; }
             .table-cell-amount { width: 9%; }
             .table-cell-vat { width: 8%; }
-            .table-cell-account { width: 15%; } /* Etwas breiter für Dropdown */
+            .table-cell-account { width: 15%; } 
             .table-cell-receipt { width: 14%; }
-            .table-cell-orig { width: 8%; } /* Neu */
+            .table-cell-orig { width: 8%; } 
         }
         .vat-rate, .account-select {
-            /* Styles für das Dropdown */
             padding: 4px;
-            border: 1px solid #ccc;
+            border: 1px solid var(--border-color);
             border-radius: 4px;
             font-size: 0.8rem;
             width: 100%;
         }
-        .select-disabled {
-            background-color: #f3f4f6;
-            color: #6b7280;
-            cursor: not-allowed;
-        }
-        /* Styling für das Modal */
-        .modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        .modal-content {
-            background-color: white;
-            padding: 24px;
-            border-radius: 12px;
-            max-width: 90%;
-            width: 800px;
-            max-height: 90%;
-            overflow-y: auto;
-        }
-        /* Link, der zur Zeile springt */
-        .jump-link {
-            text-decoration: underline;
-            color: #2563eb;
-            cursor: pointer;
-        }
-
+        
         /* NEU: Chat-Panel Styling */
         #chatModal {
             position: fixed;
@@ -90,29 +134,19 @@
             display: flex;
             flex-direction: column;
             height: 100%;
-            background-color: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
-            border: 1px solid #e2e8f0;
+            background-color: var(--bg-card);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
         }
         #chatMessages {
             flex-grow: 1;
             overflow-y: auto;
             padding: 15px;
-            background-color: #f7f9fb;
-        }
-        .user-message {
-            background-color: #3b82f6;
-            color: white;
-            border-radius: 15px 15px 0 15px;
-            max-width: 80%;
-            padding: 8px 12px;
-            margin-left: auto;
-            margin-bottom: 10px;
+            background-color: var(--bg-page);
         }
         .ai-message {
-            background-color: #e5e7eb;
-            color: #1f2937;
+            background-color: var(--border-color);
+            color: var(--text-primary);
             border-radius: 15px 15px 15px 0;
             max-width: 80%;
             padding: 8px 12px;
@@ -130,21 +164,29 @@
         <!-- Kopfzeile -->
         <header class="mb-8 flex justify-between items-start">
             <div>
-                <h1 class="text-3xl font-bold text-gray-800 flex items-center">
+                <h1 class="text-3xl font-bold text-gray-900 flex items-center">
                     Wise Buchhaltungs-Assistent (USt & SKR03 - EUR)
                     <span class="ml-3 text-sm font-medium bg-blue-100 text-blue-800 px-3 py-1 rounded-full">DB VERBUNDEN - EUR & USt</span>
                 </h1>
                 <p class="text-gray-600 mt-1">Das Tool bucht jetzt automatisch Umsatzsteuer-Satz und Konten-Code. Basiswährung: EUR. **Konten-Codes sind im Dropdown verfügbar.**</p>
             </div>
+            
+            <!-- NEU: Theme Toggle Button -->
+            <button id="themeToggle" onclick="toggleTheme()" class="p-3 rounded-full hover:text-indigo-600 transition duration-200">
+                <!-- Icon wird per JS gesetzt (Standardfarbe wird durch CSS Variable gesteuert) -->
+                <svg id="theme-icon" class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <!-- Path wird per JS gesetzt -->
+                </svg>
+            </button>
         </header>
         
         <!-- ANLEITUNG ACCORDION -->
-        <details class="card p-6 mb-8 bg-yellow-50 border-yellow-300">
-            <summary class="text-xl font-bold text-yellow-800 cursor-pointer">
+        <details class="card p-6 mb-8 bg-yellow-50 border-yellow-300 dark:bg-yellow-900 dark:border-yellow-700 dark:text-gray-200">
+            <summary class="text-xl font-bold text-yellow-800 dark:text-yellow-400 cursor-pointer">
                 Anleitung: So funktioniert die automatisierte Buchung (Klicken zum Öffnen)
             </summary>
-            <div class="mt-4 text-gray-700 space-y-4">
-                <h3 class="text-lg font-semibold border-b pb-1">Phase 1: Regeln festlegen (Nur einmal nötig)</h3>
+            <div class="mt-4 text-gray-700 dark:text-gray-300 space-y-4">
+                <h3 class="text-lg font-semibold border-b pb-1 border-yellow-300 dark:border-yellow-700">Phase 1: Regeln festlegen (Nur einmal nötig)</h3>
                 <ol class="list-decimal list-inside space-y-2 ml-4">
                     <li>**Wise CSV hochladen:** Klicke auf **"1. Wise CSV-Datei auswählen"**. Die Tabelle füllt sich mit Transaktionen.</li>
                     <li>**Manuelle Erstbuchung:** Wähle die **erste Transaktion** eines bestimmten Händlers, die **noch nicht grün** markiert ist.</li>
@@ -154,7 +196,7 @@
                     <li>**Beleg verknüpfen:** Nutze das **grüne Kamera-Icon** (Scanfunktion DEAKTIVIERT) oder trage den Link zu deinem Cloud-Speicher in die Spalte **"Beleg-Link"** ein.</li>
                 </ol>
 
-                <h3 class="text-lg font-semibold border-b pb-1 pt-3">Phase 2: Die Automatisierung (Dein Alltags-Workflow)</h3>
+                <h3 class="text-lg font-semibold border-b pb-1 pt-3 border-yellow-300 dark:border-yellow-700">Phase 2: Die Automatisierung (Dein Alltags-Workflow)</h3>
                 <ul class="list-disc list-inside space-y-2 ml-4">
                     <li>**Neue CSV hochladen:** Lade deine nächste Wise CSV hoch.</li>
                     <li>**Grüne Markierung:** Alle bekannten Transaktionen (die du in Phase 1 einmal gebucht hast) werden sofort **grün markiert** und automatisch mit Konten-Code und USt-Satz versehen. **WICHTIG:** Das Tool unterstützt jetzt **Wildcard-Regeln** (`*`), die du im Regel-Management festlegen kannst!</li>
@@ -162,7 +204,7 @@
                     <li>**Vollständigkeits-Check:** Überprüfe im Kasten **"Offene Buchungen"** (rot markiert), welche Transaktionen noch Konten-Codes oder Beleg-Links benötigen, und springe per Klick direkt zur Zeile.</li>
                 </ul>
                 
-                <h3 class="text-lg font-semibold border-b pb-1 pt-3">Phase 3: USt-Report generieren</h3>
+                <h3 class="text-lg font-semibold border-b pb-1 pt-3 border-yellow-300 dark:border-yellow-700">Phase 3: USt-Report generieren</h3>
                 <ul class="list-disc list-inside space-y-2 ml-4">
                     <li>**Datum filtern:** Gib im Abschnitt **"4. USt-Bericht und Filter"** das Start- und Enddatum für dein Quartal/Halbjahr ein.</li>
                     <li>**Bericht erstellen:** Klicke auf **"USt-Bericht generieren"**. Bei **"Offene Buchungen"** (rot) zuerst die fehlenden Einträge prüfen!</li>
@@ -252,10 +294,10 @@
                     </div>
                     <div>
                         <p class="text-sm text-gray-500">Umsatzsteuer (Geschätzt)</p>
-                        <p id="totalVAT" class="text-2xl font-bold text-yellow-600 mt-1">0.00 EUR</p>
+                        <p id="totalVAT" class="text-2xl font-bold vat-highlight mt-1">0.00 EUR</p>
                     </div>
                      <!-- NEU: Offene Buchungen -->
-                    <div class="cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition duration-150" onclick="openCompletenessModal()"
+                    <div class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-2 rounded-lg transition duration-150" onclick="openCompletenessModal()"
                          title="Klicken, um alle Transaktionen zu sehen, denen noch der Konten-Code oder der Beleg-Link fehlt.">
                         <p class="text-sm text-gray-500 font-semibold">Offene Buchungen</p>
                         <p id="openBookingsCount" class="text-2xl font-bold text-red-600 mt-1">0</p>
@@ -298,8 +340,8 @@
             </div>
 
             <!-- Bericht Ergebnisse -->
-            <div id="reportResults" class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <p class="text-gray-500">Wähle einen Zeitraum und klicke auf "USt-Bericht generieren", um die Ergebnisse anzuzeigen.</p>
+            <div id="reportResults" class="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <p class="text-gray-500 dark:text-gray-400">Wähle einen Zeitraum und klicke auf "USt-Bericht generieren", um die Ergebnisse anzuzeigen.</p>
             </div>
         </div>
 
@@ -790,6 +832,72 @@
         window.currentLang = 'de';
         window.chatHistory = []; // NEU: Speichert den Chatverlauf
 
+        // --- THEME LOGIC START ---
+        
+        /**
+         * Schaltet das Theme (light/dark) um und speichert die Präferenz.
+         */
+        window.toggleTheme = function() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('theme') || 'light';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            html.setAttribute('theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeToggleIcon(newTheme);
+        }
+        
+        /**
+         * Setzt das anfängliche Theme basierend auf localStorage oder Systempräferenz.
+         */
+        function initTheme() {
+            const html = document.documentElement;
+            const savedTheme = localStorage.getItem('theme');
+            
+            if (savedTheme) {
+                html.setAttribute('theme', savedTheme);
+                updateThemeToggleIcon(savedTheme);
+            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                // System-Dark-Mode erkennen, wenn keine Präferenz gespeichert ist
+                html.setAttribute('theme', 'dark');
+                updateThemeToggleIcon('dark');
+            } else {
+                 html.setAttribute('theme', 'light');
+                 updateThemeToggleIcon('light');
+            }
+        }
+        
+        /**
+         * Aktualisiert das Sonn-/Mond-Icon im Theme Toggle Button.
+         */
+        function updateThemeToggleIcon(theme) {
+            const iconElement = document.getElementById('theme-icon');
+            const buttonElement = document.getElementById('themeToggle');
+
+            if (!iconElement || !buttonElement) return;
+
+            if (theme === 'dark') {
+                // Mond (aktuell) -> Sonne (nächster Modus: Light)
+                iconElement.innerHTML = `
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                `;
+                iconElement.title = 'Zum Hellmodus wechseln';
+                // Farbe für den Mond (im Dark Mode)
+                buttonElement.classList.remove('text-yellow-500'); 
+                buttonElement.classList.add('text-gray-400');
+            } else {
+                // Sonne (aktuell) -> Mond (nächster Modus: Dark)
+                iconElement.innerHTML = `
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                `;
+                iconElement.title = 'Zum Dunkelmodus wechseln';
+                // Farbe für die Sonne (im Light Mode)
+                buttonElement.classList.remove('text-gray-400');
+                buttonElement.classList.add('text-yellow-500'); 
+            }
+        }
+        
+        // --- THEME LOGIC END ---
+
         // --- CHAT LOGIC START ---
 
         window.openChatModal = function() {
@@ -915,7 +1023,10 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
             const context = getChatContext();
             
             const systemPrompt = context;
-            const apiKey = "";
+            
+            // NEUE KI-API KEY HIER EINGEFÜGT. BITTE BEIM HOSTEN ERSETZEN.
+            const apiKey = typeof __initial_auth_token !== 'undefined' ? '' : '***__YOUR_GEMINI_API_KEY_HERE__***'; 
+            
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
             const payload = {
@@ -1042,8 +1153,8 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
             hiddenFileInput.onchange = handleReceiptCapture;
             document.body.appendChild(hiddenFileInput);
             
-            // Initialisiere Sprache (Kein Switcher mehr nötig)
-            // window.switchLanguage(document.getElementById('languageSwitcher').value); 
+            // Initialisiere Theme
+            initTheme(); 
             
             // NEU: Füge Event Listener für Enter-Taste im Chat hinzu
             document.getElementById('chatInput').addEventListener('keypress', function(e) {
@@ -1065,7 +1176,16 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
             const systemPrompt = `Act as a German tax accountant specializing in KMU bookkeeping (SKR03). Your task is to analyze a raw Wise transaction reference and provide the most likely SKR03 Account Code and the applicable German VAT rate (Umsatzsteuer-Satz). Base currency is EUR. The account codes must be one of the following: ${GERMAN_ACCOUNT_CODES.map(a => a.code).filter(c => c)}. The VAT rate must be one of: 0.0, 19.0, 7.0. For services/subscriptions from non-EU companies, assume reverse charge (Reverse-Charge/§13b UStG) and return the standard German input VAT rate (19.0). If the transaction is a bank fee or interest, use 4800/4900 and 0.0% VAT. Output MUST be a single JSON object.`;
             const userQuery = `Analyze this Wise transaction reference for KMU German bookkeeping (SKR03) and suggest the account code and VAT rate: "${referenceText}"`;
             
-            const apiKey = ""; // Canvas will provide this key in runtime
+            // NEUE KI-API KEY HIER EINGEFÜGT. BITTE BEIM HOSTEN ERSETZEN.
+            const apiKey = typeof __initial_auth_token !== 'undefined' ? '' : '***__YOUR_GEMINI_API_KEY_HERE__***';
+            
+            // Breche ab, wenn der API-Schlüssel fehlt (außer in der Canvas-Umgebung, wo er automatisch bereitgestellt wird)
+            if (!apiKey && typeof __initial_auth_token === 'undefined') {
+                 console.error("API Schlüssel fehlt. Bitte ersetze den Platzhalter '***__YOUR_GEMINI_API_KEY_HERE__***' in callGeminiForSuggestion.");
+                 return null;
+            }
+
+
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
             const payload = {
@@ -1094,13 +1214,11 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                    
+
                     if (!response.ok) {
-                        const errorBody = await response.text();
-                        console.error(`Gemini API Error (Status ${response.status}):`, errorBody);
                         throw new Error(`API returned status ${response.status}`);
                     }
-                    
+
                     const result = await response.json();
                     
                     const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -1129,12 +1247,13 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
                         const delay = Math.pow(2, attempt) * 1000;
                         await new Promise(resolve => setTimeout(resolve, delay));
                     } else {
+                        const errorMessage = `Entschuldigung, die Verbindung zum KI-Assistenten ist fehlgeschlagen. Fehler: ${error.message}`;
+                        window.chatHistory.unshift({ role: 'ai', text: errorMessage });
                         throw error;
                     }
                 }
             }
-            return null;
-        };
+        }
 
 
         /**
@@ -2098,7 +2217,10 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
                 rowElement.style.transition = 'background-color 0.5s ease';
                 rowElement.style.backgroundColor = '#fff3cd'; // Gelbliche Hervorhebung
                 setTimeout(() => {
-                    rowElement.style.backgroundColor = rowElement.classList.contains('auto-booked') ? '#f0fdf4' : 'white';
+                    // Setze die Hintergrundfarbe basierend auf dem aktuellen Theme/booked Status
+                    const isDark = document.documentElement.getAttribute('theme') === 'dark';
+                    const bookedColor = isDark ? '#153229' : '#f0fdf4';
+                    rowElement.style.backgroundColor = rowElement.classList.contains('auto-booked') ? bookedColor : (isDark ? 'var(--bg-card)' : 'white');
                 }, 2000);
             }
         }
@@ -2149,7 +2271,7 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
                 ).join('');
 
                 const row = document.createElement('tr');
-                row.className = 'hover:bg-gray-50';
+                row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700';
                 
                 // NEU: Input-Feld für den editierbaren Schlüssel (Wildcard)
                 const editableKey = `<input type="text" id="modal_key_${ruleId}" value="${key}" 
@@ -2206,7 +2328,7 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
 
             window.openBookings.forEach(item => {
                 const row = document.createElement('tr');
-                row.className = 'hover:bg-red-50';
+                row.className = 'hover:bg-red-50 dark:hover:bg-red-900';
                 
                 const formattedDate = new Date(item.date).toLocaleDateString('de-DE');
                 
@@ -2297,6 +2419,7 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
         // Initial setup
         window.onload = function() {
              console.log("Warte auf Firebase-Authentifizierung und Wise CSV-Upload.");
+             initTheme(); // Sicherstellen, dass das Theme geladen wird
         }
     </script>
 
