@@ -832,11 +832,11 @@
         window.currentLang = 'de';
         window.chatHistory = []; // NEU: Speichert den Chatverlauf
         
-        // --- SICHERHEITS-SETUP: KI ENDPUNKT (MUSS BEIM HOSTEN GEÄNDERT WERDEN) ---
-        // Dies ist der Platzhalter. WIRD JETZT AUF DEINEN WORKER-LINK VOM BILD KORRIGIERT.
+        // --- SICHERHEITS-SETUP: KI ENDPUNKT (FINALER FIX) ---
+        // Wenn gehostet (kein __initial_auth_token), verwende die Worker-Subdomain direkt.
         window.KI_ENDPOINT = typeof __initial_auth_token !== 'undefined' 
                              ? 'DEFAULT_CANVAS_ENDPOINT_REPLACED_BY_SYSTEM' // Wird intern ersetzt
-                             : 'https://wise-buchhaltungs-assistent.pages.dev/api/ki'; // <<< NEUER KORREKTER ENDPUNKT (MUSS MIT CLOUDFLARE ROUTE ÜBEREINSTIMMEN!)
+                             : 'https://wise-buchhaltungs-assistent.workers.dev'; // <<< DIESER LINK ERWARTET POST!
                              
         // --- HINWEIS: ALLE KI FUNKTIONEN (unten) MÜSSEN JETZT DEN WORKER AUFRUFEN, NICHT MEHR DIE GEMINI API DIREKT!
 
@@ -1044,13 +1044,7 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
             let apiKey = ''; 
 
             if (typeof __initial_auth_token === 'undefined') {
-                 // GEHOSTET: Wir rufen den Cloudflare Worker auf.
-                 if (window.KI_ENDPOINT.includes('DEFAULT_CANVAS_ENDPOINT_REPLACED_BY_SYSTEM')) {
-                     console.error("KI-FEHLER: Bitte ersetze den Platzhalter für den Worker-Endpunkt in der index.html!");
-                     return null;
-                 }
-                 // HINWEIS: Bei Pages Bindings wird die URL ignoriert, da die Bindung den Worker direkt aufruft!
-                 // Wir verwenden die Platzhalter-URL, aber die Bindung leitet sie intern um.
+                 // GEHOSTET: Wir rufen den Cloudflare Worker direkt auf.
                  apiUrl = window.KI_ENDPOINT;
                  
             } else {
@@ -1227,11 +1221,13 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
             let headers = { 'Content-Type': 'application/json' };
 
             // WENN NICHT IM CANVAS, PRÜFEN WIR AUF WORKER-URL.
-            if (typeof __initial_auth_token === 'undefined' && apiUrl.includes('DEFAULT_CANVAS_ENDPOINT_REPLACED_BY_SYSTEM')) {
-                console.error("KI-FEHLER: Bitte ersetze den Platzhalter für den Worker-Endpunkt in der index.html!");
-                return null;
-            } else if (typeof __initial_auth_token !== 'undefined') {
-                // Hier im Canvas verwenden wir den internen API-Endpunkt
+            if (typeof __initial_auth_token === 'undefined') {
+                 // GEHOSTET: Wir rufen den Cloudflare Worker direkt auf.
+                 // URL ist https://wise-buchhaltungs-assistent.workers.dev
+                 apiUrl = window.KI_ENDPOINT;
+                 
+            } else {
+                // CANVAS: Wir verwenden den internen Gemini API Endpunkt.
                 const apiKey = ''; // Wird vom System bereitgestellt
                 apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
             }
@@ -2302,7 +2298,7 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
                 
                 // Konten-Code Dropdown für Modal
                 const accountCodeOptions = GERMAN_ACCOUNT_CODES.map(item => 
-                    `<option value="${item.code}" ${tx.accountCode === item.code ? 'selected' : ''}>${t[item.key]}</option>`
+                    `<option value="${item.code}" ${rule.accountCode === item.code ? 'selected' : ''}>${t[item.key]}</option>`
                 ).join('');
 
                 const row = document.createElement('tr');
