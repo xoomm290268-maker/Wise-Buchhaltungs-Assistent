@@ -707,7 +707,7 @@
             man_p1_1: '**Wise CSV hochladen:** Klicke auf **"1. Wise CSV-Datei auswählen"**. Die Tabelle füllt sich mit Transaktionen.',
             man_p1_2: '**Manuelle Erstbuchung:** Wähle die **erste Transaktion** eines bestimmten Händlers, die **noch nicht grün** markiert ist.',
             man_p1_3: '**Konten-Code zuweisen:** Wähle in der Spalte **"Konten-Code"** den passenden Code aus dem Dropdown-Menü (z.B. `6550: IT-Kosten`).',
-            man_p1_4: '**USt-Satz festlegen:** Wähle im Dropdown **"USt-Satz"** den korrekten Satz, der auf deinem Beleg steht (z.B. `19.0% (Standard)`).',
+            man_p1_4: '**USt-Satz festlegen:** Wähle im Dropdown **"USt-Satz"** den korrekten Satz, der auf deinem Beleg steht (z.z. `19.0% (Standard)`).',
             man_p1_5: '**Regel Speichern:** Sobald du die Felder verlässt (z.B. klickst oder tippst du in ein anderes Feld), speichert das Tool diese Zuordnung automatisch und dauerhaft in deiner Datenbank.',
             man_p1_6: '**Beleg verknüpfen:** Nutze das **grüne Kamera-Icon** (Scanfunktion DEAKTIVIERT) oder trage den Link zu deinem Cloud-Speicher in die Spalte **"Beleg-Link"** ein.',
             man_p2_title: 'Phase 2: Die Automatisierung (Dein Alltags-Workflow)',
@@ -1558,7 +1558,8 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
             headers.forEach((header, index) => {
                 const cleanHeader = header.replace(/"/g, '').trim();
                 
-                if (cleanHeader === 'Abgeschlossen am' || cleanHeader === 'Completed Date') {
+                // Problem: 'Date' ist der interne Schlüssel, aber die CSV hat 'Abgeschlossen am'
+                if (cleanHeader === 'Abgeschlossen am' || cleanHeader === 'Completed Date' || cleanHeader === 'Date') {
                     headerMapping['Date'] = index;
                     foundRequiredHeaders.push('Date');
                 } else if (cleanHeader === 'Ausgangsbetrag (nach Gebühren)' || cleanHeader === 'Amount') {
@@ -1573,10 +1574,11 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
                 }
             });
 
-            // Finale Prüfung der erforderlichen Header
+            // Finale Prüfung der erforderlichen internen Header-Schlüssel
             const expectedKeys = ['Date', 'Amount', 'Currency'];
             const missingKeys = expectedKeys.filter(key => !foundRequiredHeaders.includes(key));
             if (missingKeys.length > 0) {
+                 // Der Fehler wird jetzt nur geworfen, wenn die notwendigen SPALTEN NICHT gefunden wurden.
                  throw new Error(t.msg_file_error + `Fehlender obligatorischer Header: '${missingKeys.join(', ')}'. Dein Wise-Export ist nicht kompatibel.`);
             }
 
@@ -1592,7 +1594,7 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
                 // Wir überspringen leere Zeilen oder Zeilen ohne gültigen Betrag
                 if (!amountVal) continue;
 
-                const amount = parseFloat(amountVal);
+                const amount = parseFloat(amountVal.replace(',', '.')); // FIX: Komma zu Punkt konvertieren
                 if (!isNaN(amount) && amount !== 0) {
                     transactions.push({
                         date: values[headerMapping['Date']]?.replace(/"/g, '').trim(),
