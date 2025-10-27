@@ -813,7 +813,7 @@
             acc_4940: '4940: Buchführungskosten (Steuerberater, Software) (SKR03)',
             acc_4970: '4970: Rechts- und Beratungskosten (SKR03)',
             acc_6810: '6810: Miete/Pacht (Unbewegliche Wirtschaftsgüter) (SKR03)',
-            // Hinweis: Im SKR03 beginnen Kosten oft mit 4x, Wareneingang 3200
+            // 3. Wareneingang und Dienstleistungen
             acc_3200: '3200: Wareneingang (SKR03)',
             acc_4210: '4210: Fremdarbeiten (SKR03)',
             acc_4290: '4290: Sonstige Kosten der Warenabgabe (SKR03)',
@@ -831,6 +831,14 @@
         
         window.currentLang = 'de';
         window.chatHistory = []; // NEU: Speichert den Chatverlauf
+        
+        // --- SICHERHEITS-SETUP: KI ENDPUNKT (MUSS BEIM HOSTEN GEÄNDERT WERDEN) ---
+        // Dies ist der Platzhalter. WIRD JETZT AUF DEINEN WORKER-LINK VOM BILD KORRIGIERT.
+        window.KI_ENDPOINT = typeof __initial_auth_token !== 'undefined' 
+                             ? 'DEFAULT_CANVAS_ENDPOINT_REPLACED_BY_SYSTEM' // Wird intern ersetzt
+                             : 'https://wise-buchhaltungs-assistent.pages.dev/api/ki'; // <<< NEUER KORREKTER ENDPUNKT (MUSS MIT CLOUDFLARE ROUTE ÜBEREINSTIMMEN!)
+                             
+        // --- HINWEIS: ALLE KI FUNKTIONEN (unten) MÜSSEN JETZT DEN WORKER AUFRUFEN, NICHT MEHR DIE GEMINI API DIREKT!
 
         // --- THEME LOGIC START ---
         
@@ -1024,28 +1032,48 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
             
             const systemPrompt = context;
             
-            // NEUE KI-API KEY HIER EINGEFÜGT. BITTE BEIM HOSTEN ERSETZEN.
-            const apiKey = typeof __initial_auth_token !== 'undefined' ? '' : '***__YOUR_GEMINI_API_KEY_HERE__***'; 
-            
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
             const payload = {
                 contents: [{ parts: [{ text: userMessage }] }],
                 systemInstruction: {
                     parts: [{ text: systemPrompt }]
                 }
             };
+            
+            let apiUrl = window.KI_ENDPOINT;
+            let headers = { 'Content-Type': 'application/json' };
+            let apiKey = ''; 
+
+            if (typeof __initial_auth_token === 'undefined') {
+                 // GEHOSTET: Wir rufen den Cloudflare Worker auf.
+                 if (window.KI_ENDPOINT.includes('DEFAULT_CANVAS_ENDPOINT_REPLACED_BY_SYSTEM')) {
+                     console.error("KI-FEHLER: Bitte ersetze den Platzhalter für den Worker-Endpunkt in der index.html!");
+                     return null;
+                 }
+                 // HINWEIS: Bei Pages Bindings wird die URL ignoriert, da die Bindung den Worker direkt aufruft!
+                 // Wir verwenden die Platzhalter-URL, aber die Bindung leitet sie intern um.
+                 apiUrl = window.KI_ENDPOINT;
+                 
+            } else {
+                // CANVAS: Wir verwenden den internen Gemini API Endpunkt.
+                apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                apiKey = ''; // Wird vom Canvas/System bereitgestellt
+            }
 
             const MAX_RETRIES = 3;
             for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
                 try {
                     const response = await fetch(apiUrl, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: headers,
                         body: JSON.stringify(payload)
                     });
 
                     if (!response.ok) {
+                        // NEU: Zusätzlicher Check für Worker-Fehler
+                         if (typeof __initial_auth_token === 'undefined') {
+                             console.error(`Worker-Fehler: Status ${response.status}. Worker-Code prüfen (z.B. Secret Key richtig gesetzt?).`);
+                             throw new Error(`Worker-Fehler: Status ${response.status}.`);
+                         }
                         throw new Error(`API returned status ${response.status}`);
                     }
 
@@ -1167,7 +1195,8 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
         // --- CORE LOGIC START ---
 
         /**
-         * NEU: Ruft die Gemini API auf, um einen Buchungsvorschlag zu erhalten.
+         * NEU: Ruft die Gemini API über den Worker auf, um einen Buchungsvorschlag zu erhalten.
+         * Der API Key ist hier leer, da der Worker ihn selbst hinzufügt.
          * @param {string} referenceText - Der Text zur Analyse.
          * @returns {Promise<{accountCode: string, vatRate: number}|null>}
          */
@@ -1176,18 +1205,6 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
             const systemPrompt = `Act as a German tax accountant specializing in KMU bookkeeping (SKR03). Your task is to analyze a raw Wise transaction reference and provide the most likely SKR03 Account Code and the applicable German VAT rate (Umsatzsteuer-Satz). Base currency is EUR. The account codes must be one of the following: ${GERMAN_ACCOUNT_CODES.map(a => a.code).filter(c => c)}. The VAT rate must be one of: 0.0, 19.0, 7.0. For services/subscriptions from non-EU companies, assume reverse charge (Reverse-Charge/§13b UStG) and return the standard German input VAT rate (19.0). If the transaction is a bank fee or interest, use 4800/4900 and 0.0% VAT. Output MUST be a single JSON object.`;
             const userQuery = `Analyze this Wise transaction reference for KMU German bookkeeping (SKR03) and suggest the account code and VAT rate: "${referenceText}"`;
             
-            // NEUE KI-API KEY HIER EINGEFÜGT. BITTE BEIM HOSTEN ERSETZEN.
-            const apiKey = typeof __initial_auth_token !== 'undefined' ? '' : '***__YOUR_GEMINI_API_KEY_HERE__***';
-            
-            // Breche ab, wenn der API-Schlüssel fehlt (außer in der Canvas-Umgebung, wo er automatisch bereitgestellt wird)
-            if (!apiKey && typeof __initial_auth_token === 'undefined') {
-                 console.error("API Schlüssel fehlt. Bitte ersetze den Platzhalter '***__YOUR_GEMINI_API_KEY_HERE__***' in callGeminiForSuggestion.");
-                 return null;
-            }
-
-
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
             const payload = {
                 contents: [{ parts: [{ text: userQuery }] }],
                 systemInstruction: {
@@ -1206,16 +1223,35 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
                 }
             };
             
+            let apiUrl = window.KI_ENDPOINT;
+            let headers = { 'Content-Type': 'application/json' };
+
+            // WENN NICHT IM CANVAS, PRÜFEN WIR AUF WORKER-URL.
+            if (typeof __initial_auth_token === 'undefined' && apiUrl.includes('DEFAULT_CANVAS_ENDPOINT_REPLACED_BY_SYSTEM')) {
+                console.error("KI-FEHLER: Bitte ersetze den Platzhalter für den Worker-Endpunkt in der index.html!");
+                return null;
+            } else if (typeof __initial_auth_token !== 'undefined') {
+                // Hier im Canvas verwenden wir den internen API-Endpunkt
+                const apiKey = ''; // Wird vom System bereitgestellt
+                apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            }
+
+            
             const MAX_RETRIES = 3;
             for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
                 try {
                     const response = await fetch(apiUrl, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: headers,
                         body: JSON.stringify(payload)
                     });
 
                     if (!response.ok) {
+                         if (typeof __initial_auth_token === 'undefined') {
+                             // Bei gehostetem Worker: zeige Worker Status an
+                             console.error(`Worker-Fehler: Status ${response.status}. Worker-Code/Secret prüfen.`);
+                             throw new Error(`Worker-Fehler: Status ${response.status}.`);
+                         }
                         throw new Error(`API returned status ${response.status}`);
                     }
 
@@ -1247,13 +1283,12 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
                         const delay = Math.pow(2, attempt) * 1000;
                         await new Promise(resolve => setTimeout(resolve, delay));
                     } else {
-                        const errorMessage = `Entschuldigung, die Verbindung zum KI-Assistenten ist fehlgeschlagen. Fehler: ${error.message}`;
-                        window.chatHistory.unshift({ role: 'ai', text: errorMessage });
                         throw error;
                     }
                 }
             }
-        }
+            return null;
+        };
 
 
         /**
@@ -1632,14 +1667,14 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
                 } catch (error) {
                     messageElement.textContent = error.message;
                     messageElement.classList.remove('text-green-600');
-                    messageElement.classList.add('text-red-500');
+                    document.getElementById('importMessage').classList.add('text-red-500');
                     document.getElementById('jsonFile').value = ''; 
                 }
             };
             reader.onerror = () => {
                  messageElement.textContent = t.msg_file_error + 'Fehler beim Lesen der Datei.';
                  messageElement.classList.remove('text-green-600');
-                 messageElement.classList.add('text-red-500');
+                 document.getElementById('importMessage').classList.add('text-red-500');
                  document.getElementById('jsonFile').value = ''; 
             };
             reader.readAsText(file);
@@ -2235,7 +2270,7 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
             const t = window.DE_TEXTS;
             const mappings = window.categoryMappings;
             
-            // NEU: Sortiere die Keys nach der Priorität, um die Übersichtlichkeit zu erhöhen
+            // NEU: Sortiere die Keys zuerst nach Priorität (niedriger Wert = höhere Priorität), dann alphabetisch
             const keys = Object.keys(mappings).sort((a, b) => {
                 const priorityA = mappings[a].priority !== undefined ? mappings[a].priority : 50;
                 const priorityB = mappings[b].priority !== undefined ? mappings[b].priority : 50;
