@@ -1045,6 +1045,7 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
 
             if (typeof __initial_auth_token === 'undefined') {
                  // GEHOSTET: Wir rufen den Cloudflare Worker direkt auf.
+                 // URL ist https://wise-buchhaltungs-assistent.workers.dev
                  apiUrl = window.KI_ENDPOINT;
                  
             } else {
@@ -1220,7 +1221,6 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
             let apiUrl = window.KI_ENDPOINT;
             let headers = { 'Content-Type': 'application/json' };
 
-            // WENN NICHT IM CANVAS, PRÜFEN WIR AUF WORKER-URL.
             if (typeof __initial_auth_token === 'undefined') {
                  // GEHOSTET: Wir rufen den Cloudflare Worker direkt auf.
                  // URL ist https://wise-buchhaltungs-assistent.workers.dev
@@ -1547,15 +1547,46 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
             // Analyze header row (first line)
             const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
             
-            // Check required headers
-            const requiredHeaders = ['Date', 'Amount', 'Currency', 'Reference'];
-            for (const req of requiredHeaders) {
-                if (!headers.includes(req)) {
-                    if (req === 'Reference' && headers.includes('Details')) continue;
-                    throw new Error(t.msg_file_error + `Fehlender obligatorischer Header: '${req}'. Stellen Sie sicher, dass Sie die Wise 'Activities' CSV verwenden.`);
-                }
-            }
+            // WICHTIG: Die korrigierten Header, die deine Wise CSV akzeptiert
+            const requiredHeaders = ['Abgeschlossen am', 'Amount', 'Currency', 'Reference'];
             
+            // Finde den tatsächlichen Header, der in deiner Datei für das Datum verwendet wird
+            let dateHeader = requiredHeaders[0];
+            let referenceHeader = requiredHeaders[3];
+
+            // Flexible Header-Prüfung
+            let foundRequiredHeaders = [];
+            let headerMapping = {};
+            
+            // Finde den tatsächlichen Header-Index und ordne ihn zu
+            headers.forEach((header, index) => {
+                const cleanHeader = header.replace(/"/g, '').trim();
+                
+                if (cleanHeader === 'Abgeschlossen am' || cleanHeader === 'Completed Date') {
+                    dateHeader = header;
+                    headerMapping['Date'] = index;
+                    foundRequiredHeaders.push('Date');
+                } else if (cleanHeader === 'Referenz') {
+                    referenceHeader = header;
+                    headerMapping['Reference'] = index;
+                    foundRequiredHeaders.push('Reference');
+                } else if (cleanHeader === 'Ausgangsbetrag (nach Gebühren)') {
+                    headerMapping['Amount'] = index;
+                    foundRequiredHeaders.push('Amount');
+                } else if (cleanHeader === 'Ausgangswährung') {
+                    headerMapping['Currency'] = index;
+                    foundRequiredHeaders.push('Currency');
+                }
+            });
+
+            // Finale Prüfung der erforderlichen Header
+            const expectedKeys = ['Date', 'Amount', 'Currency'];
+            const missingKeys = expectedKeys.filter(key => !foundRequiredHeaders.includes(key));
+            if (missingKeys.length > 0) {
+                 throw new Error(t.msg_file_error + `Fehlende obligatorische Header: '${missingKeys.join(', ')}'. Dein Wise-Export ist nicht kompatibel.`);
+            }
+
+
             // Parse data rows
             for (let i = 1; i < lines.length; i++) {
                 const values = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); 
@@ -1566,14 +1597,21 @@ Deine Antworten müssen stets freundlich, präzise und auf die Buchführung bezo
                 headers.forEach((header, index) => {
                     row[header.replace(/"/g, '').trim()] = values[index].replace(/"/g, '').trim();
                 });
+                
+                // Nutze die gefundenen Header, um die Daten zu extrahieren
+                const dateVal = values[headerMapping['Date']]?.replace(/"/g, '').trim() || row['Abgeschlossen am'] || row['Completed Date'];
+                const amountVal = values[headerMapping['Amount']]?.replace(/"/g, '').trim();
+                const currencyVal = values[headerMapping['Currency']]?.replace(/"/g, '').trim();
+                const referenceVal = values[headerMapping['Reference']]?.replace(/"/g, '').trim() || row['Referenz'] || 'N/A';
 
-                const amount = parseFloat(row['Amount']);
+
+                const amount = parseFloat(amountVal);
                 if (!isNaN(amount) && amount !== 0) {
                     transactions.push({
-                        date: row['Date'],
-                        reference: row['Reference'] || row['Details'] || 'N/A', 
+                        date: dateVal,
+                        reference: referenceVal, 
                         amount: amount,
-                        currency: row['Currency'],
+                        currency: currencyVal,
                         // NEUE FELDER FÜR BUCHHALTUNG
                         accountCode: '', 
                         vatRate: 0.0, // Standard-MWST-Satz auf 0 setzen
